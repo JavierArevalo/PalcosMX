@@ -251,6 +251,51 @@
   <div class="wrap">Palcos — prototype marketplace. Payments are simulated; no real charges occur.</div>
 </footer>
 
+<!-- In-page dialogs — native prompt()/alert() are unavailable in embedded
+     webviews and blockable in browsers, so all interaction stays in the DOM. -->
+<dialog class="app-dialog" id="requestDialog">
+  <form id="formRequest" class="stack">
+    <h3>Request this suite</h3>
+    <p class="dialog-context" id="requestContext"></p>
+    <textarea id="requestMessage" name="message" rows="3" placeholder="Add a note for the owner (optional)"></textarea>
+    <div class="dialog-actions">
+      <button type="button" class="ghost-btn" id="requestCancel">Cancel</button>
+      <button type="submit" class="primary-btn">Send request</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog class="app-dialog" id="surveyDialog">
+  <form id="formSurvey" class="stack">
+    <h3>How was your visit?</h3>
+    <label class="dialog-field">Box experience
+      <select name="box_experience">
+        <option value="5">5 — Excellent</option>
+        <option value="4">4 — Good</option>
+        <option value="3">3 — Okay</option>
+        <option value="2">2 — Poor</option>
+        <option value="1">1 — Bad</option>
+      </select>
+    </label>
+    <label class="dialog-field">Booking process
+      <select name="booking_experience">
+        <option value="5">5 — Excellent</option>
+        <option value="4">4 — Good</option>
+        <option value="3">3 — Okay</option>
+        <option value="2">2 — Poor</option>
+        <option value="1">1 — Bad</option>
+      </select>
+    </label>
+    <textarea name="comments" rows="2" placeholder="Comments (optional)"></textarea>
+    <div class="dialog-actions">
+      <button type="button" class="ghost-btn" id="surveyCancel">Cancel</button>
+      <button type="submit" class="primary-btn">Submit feedback</button>
+    </div>
+  </form>
+</dialog>
+
+<div id="toasts" aria-live="polite"></div>
+
 <script src="/static/app.js"></script>
 </body>
 </html>

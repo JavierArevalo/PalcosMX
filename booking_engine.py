@@ -9,6 +9,12 @@ Implements the "Booking Engine functionalities" section of the roadmap:
 Storage is SQLite via SQLAlchemy (see db.py / models.py). The engine is
 a thin service layer over the database session; feed scoring stays in
 Python since the datasets are prototype-sized.
+
+Unit of work: engine methods only modify the session (flushing so ids are
+assigned and constraint errors surface at the call site) — they never
+commit. The caller owns the transaction: for HTTP requests app.py commits
+on success / rolls back on error at the request boundary, and the seed
+commits once at the end.
 """
 
 from __future__ import annotations
@@ -36,7 +42,7 @@ class BookingEngine:
                               location: str = "", social_media: Optional[dict] = None) -> Owner:
         owner = Owner(name, email, password, location, social_media)
         db_session.add(owner)
-        db_session.commit()
+        db_session.flush()
         return owner
 
     def create_private_box(self, owner_id: str, stadium_id: str, capacity: int,
@@ -49,7 +55,7 @@ class BookingEngine:
 
         box = PrivateBox(owner_id, stadium_id, capacity, location_in_stadium, description)
         db_session.add(box)
-        db_session.commit()
+        db_session.flush()
         return box
 
     def add_listing(self, box_id: str, date: str, price: float,
@@ -58,7 +64,7 @@ class BookingEngine:
         their private box."""
         box = self._get_box(box_id)
         listing = box.add_listing(date, price, capacity, description)
-        db_session.commit()
+        db_session.flush()
         return listing
 
     def remove_listing(self, box_id: str, date: str) -> bool:
@@ -67,7 +73,7 @@ class BookingEngine:
         computed from available_dates."""
         box = self._get_box(box_id)
         removed = box.remove_listing(date)
-        db_session.commit()
+        db_session.flush()
         return removed
 
     # =======================================================================
@@ -78,13 +84,13 @@ class BookingEngine:
                                location: str = "", social_media: Optional[dict] = None) -> Renter:
         renter = Renter(name, email, password, location, social_media)
         db_session.add(renter)
-        db_session.commit()
+        db_session.flush()
         return renter
 
     def save_preferences(self, renter_id: str, **prefs) -> Renter:
         renter = self._get_renter(renter_id)
         renter.save_preferences(**prefs)
-        db_session.commit()
+        db_session.flush()
         return renter
 
     def create_rent_request(self, renter_id: str, box_id: str, date: str,
@@ -129,7 +135,7 @@ class BookingEngine:
             message=message,
             renter_history=history_summary,
         ))
-        db_session.commit()
+        db_session.flush()
         return self.process_rent_request(request)
 
     def _renter_history_summary(self, renter: Renter) -> list[dict]:
@@ -167,7 +173,7 @@ class BookingEngine:
         )
         request.instructions = instructions
         request.status = "completed"
-        db_session.commit()
+        db_session.flush()
         return instructions
 
     def post_visit_survey(self, request_id: str, box_experience: int,
@@ -180,7 +186,7 @@ class BookingEngine:
             "comments": comments,
         }
         request.survey = survey
-        db_session.commit()
+        db_session.flush()
         return survey
 
     # =======================================================================
@@ -231,7 +237,7 @@ class BookingEngine:
             ))
         for other in others:
             self.reject_booking(other.id, reason="Another earlier request was accepted for this box/date.")
-        db_session.commit()
+        db_session.flush()
         return request
 
     def reject_booking(self, request_id: str, reason: str = "The owner withdrew their listing.") -> RentRequest:
@@ -241,7 +247,7 @@ class BookingEngine:
         request.status = "rejected"
         request.reject_reason = reason
         self._get_box(request.box_id).set_request_status(request_id, "rejected", reason)
-        db_session.commit()
+        db_session.flush()
         return request
 
     def process_payment(self, request_id: str, provider: str, token: str,
@@ -278,7 +284,7 @@ class BookingEngine:
             location_in_stadium=box.location_in_stadium,
             event_description=request.renter_snapshot.get("event_description", ""),
         ))
-        db_session.commit()
+        db_session.flush()
         return request
 
     def available_boxes(self, stadium_id: Optional[str] = None) -> list[dict]:
@@ -401,7 +407,7 @@ class BookingEngine:
                         longitude: float = 0.0) -> Stadium:
         stadium = Stadium(name, city, latitude, longitude)
         db_session.add(stadium)
-        db_session.commit()
+        db_session.flush()
         return stadium
 
     def list_stadiums(self) -> list[Stadium]:
