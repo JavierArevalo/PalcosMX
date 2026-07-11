@@ -1,9 +1,10 @@
 /**
  * Palcos Testimonials — Cinematic Dark Luxury
- * Customer testimonials with star ratings and avatar initials
+ * Customer testimonials in a carousel with star ratings and avatar initials
  */
-import { motion } from "framer-motion";
-import { Star, Quote } from "lucide-react";
+import { useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { Star, Quote, ChevronLeft, ChevronRight } from "lucide-react";
 
 const testimonials = [
   {
@@ -68,58 +69,98 @@ const testimonials = [
   },
 ];
 
-function TestimonialCard({ testimonial, index }: { testimonial: typeof testimonials[0]; index: number }) {
+function TestimonialSlide({ testimonial }: { testimonial: typeof testimonials[0] }) {
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 30 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true, margin: "-60px" }}
-      transition={{ duration: 0.6, delay: index * 0.08 }}
-      className="bg-[oklch(0.13_0.007_260)] rounded-lg p-7 border border-white/6 hover:border-[oklch(0.72_0.12_75/20%)] transition-all duration-400 hover:shadow-[0_16px_48px_oklch(0.72_0.12_75/6%)] flex flex-col"
-    >
-      {/* Quote icon */}
-      <Quote size={24} className="text-[oklch(0.72_0.12_75/30%)] mb-4" />
+    <div className="bg-[oklch(0.13_0.007_260)] rounded-lg p-8 sm:p-12 border border-white/6 relative overflow-hidden">
+      <Quote size={64} className="absolute top-8 right-8 text-[oklch(0.72_0.12_75/10%)]" />
 
-      {/* Stars */}
-      <div className="flex gap-1 mb-4">
-        {Array.from({ length: testimonial.rating }).map((_, i) => (
-          <Star key={i} size={13} className="fill-[oklch(0.72_0.12_75)] text-[oklch(0.72_0.12_75)]" />
-        ))}
-      </div>
-
-      {/* Text */}
-      <p
-        className="text-[oklch(0.72_0.010_260)] leading-relaxed text-sm flex-1 mb-6"
-        style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 300 }}
-      >
-        "{testimonial.text}"
-      </p>
-
-      {/* Venue tag */}
-      <div className="mb-5">
-        <span className="text-xs text-[oklch(0.72_0.12_75)] border border-[oklch(0.72_0.12_75/25%)] px-2.5 py-1 rounded-sm" style={{ fontFamily: "'Outfit', sans-serif" }}>
-          {testimonial.venue}
-        </span>
-      </div>
-
-      {/* Author */}
-      <div className="flex items-center gap-3 pt-4 border-t border-white/6">
-        <div className={`w-10 h-10 rounded-full bg-gradient-to-br ${testimonial.color} flex items-center justify-center shrink-0`}>
-          <span className="text-white text-xs font-bold" style={{ fontFamily: "'Outfit', sans-serif" }}>{testimonial.initials}</span>
+      <div className="flex flex-col md:flex-row gap-8 items-start relative">
+        {/* Avatar */}
+        <div className={`w-16 h-16 rounded-2xl bg-gradient-to-br ${testimonial.color} flex items-center justify-center shrink-0`}>
+          <span className="text-white text-lg font-bold" style={{ fontFamily: "'Outfit', sans-serif" }}>{testimonial.initials}</span>
         </div>
-        <div>
-          <div
-            className="text-sm font-semibold text-white"
-            style={{ fontFamily: "'Cormorant Garamond', serif" }}
+
+        <div className="flex-1">
+          {/* Stars */}
+          <div className="flex gap-1 mb-4">
+            {Array.from({ length: testimonial.rating }).map((_, i) => (
+              <Star key={i} size={15} className="fill-[oklch(0.72_0.12_75)] text-[oklch(0.72_0.12_75)]" />
+            ))}
+          </div>
+
+          {/* Text */}
+          <blockquote
+            className="text-lg sm:text-xl text-[oklch(0.80_0.008_80)] leading-relaxed mb-6"
+            style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 300 }}
           >
-            {testimonial.name}
-          </div>
-          <div className="text-xs text-[oklch(0.50_0.008_260)]" style={{ fontFamily: "'Outfit', sans-serif" }}>
-            {testimonial.role} · {testimonial.company}
+            "{testimonial.text}"
+          </blockquote>
+
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div>
+              <div className="text-lg font-semibold text-white" style={{ fontFamily: "'Cormorant Garamond', serif" }}>
+                {testimonial.name}
+              </div>
+              <div className="text-xs text-[oklch(0.50_0.008_260)]" style={{ fontFamily: "'Outfit', sans-serif" }}>
+                {testimonial.role} · {testimonial.company}
+              </div>
+            </div>
+            <span className="text-xs text-[oklch(0.72_0.12_75)] border border-[oklch(0.72_0.12_75/25%)] px-2.5 py-1 rounded-sm self-start sm:self-auto" style={{ fontFamily: "'Outfit', sans-serif" }}>
+              {testimonial.venue}
+            </span>
           </div>
         </div>
       </div>
-    </motion.div>
+    </div>
+  );
+}
+
+function Carousel() {
+  const [current, setCurrent] = useState(0);
+  const next = () => setCurrent((prev) => (prev + 1) % testimonials.length);
+  const prev = () => setCurrent((prev) => (prev - 1 + testimonials.length) % testimonials.length);
+
+  const navBtn =
+    "w-10 h-10 rounded-full border border-white/10 flex items-center justify-center text-[oklch(0.72_0.12_75)] hover:bg-[oklch(0.72_0.12_75)] hover:text-[oklch(0.09_0.005_260)] hover:border-[oklch(0.72_0.12_75)] transition-all";
+
+  return (
+    <div className="max-w-4xl mx-auto">
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={current}
+          initial={{ opacity: 0, x: 50 }}
+          animate={{ opacity: 1, x: 0 }}
+          exit={{ opacity: 0, x: -50 }}
+          transition={{ duration: 0.4 }}
+        >
+          <TestimonialSlide testimonial={testimonials[current]} />
+        </motion.div>
+      </AnimatePresence>
+
+      {/* Navigation */}
+      <div className="flex items-center justify-center gap-4 mt-8">
+        <button onClick={prev} className={navBtn} aria-label="Anterior">
+          <ChevronLeft size={18} />
+        </button>
+        <div className="flex gap-2">
+          {testimonials.map((_, index) => (
+            <button
+              key={index}
+              onClick={() => setCurrent(index)}
+              aria-label={`Testimonio ${index + 1}`}
+              className={`h-2 rounded-full transition-all ${
+                index === current
+                  ? "w-8 bg-[oklch(0.72_0.12_75)]"
+                  : "w-2 bg-white/20 hover:bg-white/35"
+              }`}
+            />
+          ))}
+        </div>
+        <button onClick={next} className={navBtn} aria-label="Siguiente">
+          <ChevronRight size={18} />
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -158,12 +199,8 @@ export default function Testimonials() {
           </p>
         </motion.div>
 
-        {/* Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {testimonials.map((t, i) => (
-            <TestimonialCard key={i} testimonial={t} index={i} />
-          ))}
-        </div>
+        {/* Carousel */}
+        <Carousel />
 
         {/* Trust badges */}
         <motion.div

@@ -6,7 +6,7 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { Search, MapPin, Building2, Calendar } from "lucide-react";
-import { toast } from "sonner";
+import { useLocation } from "wouter";
 
 const HERO_BG = "/images/hero.jpg";
 
@@ -19,16 +19,38 @@ const stats = [
   { value: "4.9★", label: "Calificación Promedio" },
 ];
 
+// Floating gold particles rising through the hero (subtle, decorative).
+function GoldParticles() {
+  return (
+    <div className="absolute inset-0 overflow-hidden pointer-events-none" aria-hidden>
+      {Array.from({ length: 14 }).map((_, i) => (
+        <motion.span
+          key={i}
+          className="absolute w-1 h-1 rounded-full bg-[oklch(0.72_0.12_75/45%)]"
+          style={{ left: `${(i * 7.3 + 4) % 100}%` }}
+          initial={{ y: "105vh", opacity: 0 }}
+          animate={{ y: "-5vh", opacity: [0, 1, 0] }}
+          transition={{
+            duration: 12 + (i % 5) * 3,
+            repeat: Infinity,
+            delay: i * 0.9,
+            ease: "linear",
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
 export default function HeroSection() {
   const [city, setCity] = useState("");
   const [venueType, setVenueType] = useState("");
   const [date, setDate] = useState("");
+  const [, navigate] = useLocation();
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    toast.success("Buscando palcos disponibles...", {
-      description: `${city || "Todas las ciudades"} · ${venueType || "Todos los tipos"} · ${date || "Cualquier fecha"}`,
-    });
+    navigate("/explorar");
   };
 
   return (
@@ -41,6 +63,8 @@ export default function HeroSection() {
       {/* Gradient overlays */}
       <div className="absolute inset-0 bg-gradient-to-b from-[oklch(0.09_0.005_260/0.75)] via-[oklch(0.09_0.005_260/0.55)] to-[oklch(0.09_0.005_260/0.90)]" />
       <div className="absolute inset-0 bg-gradient-to-r from-[oklch(0.09_0.005_260/0.60)] via-transparent to-transparent" />
+
+      <GoldParticles />
 
       {/* Content */}
       <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-28 pb-16">

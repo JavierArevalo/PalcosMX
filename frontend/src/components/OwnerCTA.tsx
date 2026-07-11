@@ -5,7 +5,8 @@
  */
 import { motion } from "framer-motion";
 import { TrendingUp, Shield, Clock, ChevronRight } from "lucide-react";
-import { toast } from "sonner";
+import { Link, useLocation } from "wouter";
+import { useAuth } from "@/contexts/AuthContext";
 
 const OWNER_IMG = "/images/owner.jpg";
 
@@ -28,7 +29,11 @@ const benefits = [
 ];
 
 export default function OwnerCTA() {
-  const handlePublish = () => toast.success("¡Excelente! Te contactaremos pronto para publicar tu palco.");
+  const { user } = useAuth();
+  const [, navigate] = useLocation();
+
+  // Owners land on their dashboard; everyone else starts at signup.
+  const handlePublish = () => navigate(user?.role === "owner" ? "/mis-palcos" : "/acceso");
 
   return (
     <section id="owners" className="relative py-24 lg:py-32 overflow-hidden bg-[oklch(0.09_0.005_260)]">
@@ -74,10 +79,10 @@ export default function OwnerCTA() {
                     className="text-2xl font-bold text-gold-gradient"
                     style={{ fontFamily: "'Cormorant Garamond', serif" }}
                   >
-                    +340%
+                    +$2.5M MXN
                   </div>
                   <div className="text-xs text-[oklch(0.58_0.010_260)]" style={{ fontFamily: "'Outfit', sans-serif" }}>
-                    ROI promedio de propietarios
+                    Promedio anual por palco premium
                   </div>
                 </div>
               </div>
@@ -147,6 +152,18 @@ export default function OwnerCTA() {
               ))}
             </div>
 
+            {/* Money stats */}
+            <div className="grid grid-cols-2 gap-4 mb-10 max-w-sm">
+              <div className="bg-[oklch(0.13_0.007_260)] border border-white/6 rounded-lg p-4">
+                <div className="text-2xl font-bold text-gold-gradient" style={{ fontFamily: "'Cormorant Garamond', serif" }}>95%</div>
+                <p className="text-xs text-[oklch(0.58_0.010_260)]" style={{ fontFamily: "'Outfit', sans-serif" }}>Tasa de ocupación</p>
+              </div>
+              <div className="bg-[oklch(0.13_0.007_260)] border border-white/6 rounded-lg p-4">
+                <div className="text-2xl font-bold text-gold-gradient" style={{ fontFamily: "'Cormorant Garamond', serif" }}>48 hrs</div>
+                <p className="text-xs text-[oklch(0.58_0.010_260)]" style={{ fontFamily: "'Outfit', sans-serif" }}>Tiempo de pago</p>
+              </div>
+            </div>
+
             {/* CTA Buttons */}
             <div className="flex flex-col sm:flex-row gap-3">
               <button
@@ -156,13 +173,13 @@ export default function OwnerCTA() {
                 Publicar Mi Palco
                 <ChevronRight size={16} className="group-hover:translate-x-1 transition-transform" />
               </button>
-              <button
-                onClick={() => toast.info("Próximamente: Más información para propietarios.")}
-                className="px-8 py-4 rounded-sm text-sm font-medium border border-white/15 text-[oklch(0.75_0.008_80)] hover:border-[oklch(0.72_0.12_75/40%)] hover:text-white transition-all duration-300"
+              <Link
+                href="/#how-it-works"
+                className="px-8 py-4 rounded-sm text-sm font-medium border border-white/15 text-[oklch(0.75_0.008_80)] hover:border-[oklch(0.72_0.12_75/40%)] hover:text-white transition-all duration-300 text-center"
                 style={{ fontFamily: "'Outfit', sans-serif" }}
               >
                 Saber Más
-              </button>
+              </Link>
             </div>
           </motion.div>
         </div>
