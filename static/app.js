@@ -29,6 +29,18 @@ async function api(path, options = {}) {
 }
 
 // ---------------------------------------------------------------------------
+// Toasts — in-page notifications; native alert()/prompt() are unavailable
+// in embedded webviews and blockable in browsers, so feedback stays in the DOM.
+// ---------------------------------------------------------------------------
+function toast(message, kind = "info") {
+  const el = document.createElement("div");
+  el.className = `toast toast-${kind}`;
+  el.textContent = message;
+  $("#toasts").appendChild(el);
+  setTimeout(() => el.remove(), 4500);
+}
+
+// ---------------------------------------------------------------------------
 // Views (auth -> confirm -> prefs -> app) + tabs
 // ---------------------------------------------------------------------------
 const ONBOARD_VIEWS = ["viewAuth", "viewConfirm", "viewPrefs"];
@@ -316,28 +328,45 @@ function renderListings(entries, deal = false) {
   $$(".stub-btn").forEach((btn) => btn.addEventListener("click", onRequestClick));
 }
 
-async function onRequestClick(e) {
+function onRequestClick(e) {
   const { box: boxId, date } = e.target.dataset;
   if (!state.user) {
     showView("viewAuth");
     return;
   }
   if (state.user.role !== "renter") {
-    alert("Requests are for renter accounts — you're logged in as an owner.");
+    toast("Requests are for renter accounts — you're logged in as an owner.", "error");
     return;
   }
-  const message = prompt("Add a note for the owner (optional):", "") || "";
+  const dialog = $("#requestDialog");
+  dialog.dataset.box = boxId;
+  dialog.dataset.date = date;
+  $("#requestContext").textContent = `For ${date} — the owner sees your name, note and booking history.`;
+  $("#requestMessage").value = "";
+  dialog.showModal();
+}
+
+$("#requestCancel").addEventListener("click", () => $("#requestDialog").close());
+$("#formRequest").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const dialog = $("#requestDialog");
   try {
     await api("/api/requests", {
       method: "POST",
-      body: JSON.stringify({ box_id: boxId, date, message }),
+      body: JSON.stringify({
+        box_id: dialog.dataset.box,
+        date: dialog.dataset.date,
+        message: $("#requestMessage").value.trim(),
+      }),
     });
-    alert("Request sent to the owner. Track its status under My Reservations.");
+    dialog.close();
+    toast("Request sent to the owner. Track its status under My Reservations.", "success");
     refreshRenterRequests();
   } catch (err) {
-    if (err.status !== 403) alert(err.message);
+    dialog.close();
+    if (err.status !== 403) toast(err.message, "error");
   }
-}
+});
 
 async function loadListings() {
   const stadiumId = $("#filterStadium").value;
@@ -441,8 +470,9 @@ function wireOwnerActions() {
   $$(".accept-btn").forEach((b) => b.addEventListener("click", async () => {
     try {
       await api(`/api/requests/${b.dataset.id}/accept`, { method: "POST" });
+      toast("Request accepted — the renter can now pay.", "success");
     } catch (err) {
-      if (err.status !== 403) alert(err.message);
+      if (err.status !== 403) toast(err.message, "error");
     }
     refreshOwnerRequests();
   }));
@@ -450,7 +480,7 @@ function wireOwnerActions() {
     try {
       await api(`/api/requests/${b.dataset.id}/reject`, { method: "POST", body: JSON.stringify({}) });
     } catch (err) {
-      if (err.status !== 403) alert(err.message);
+      if (err.status !== 403) toast(err.message, "error");
     }
     refreshOwnerRequests();
   }));
@@ -501,26 +531,50 @@ function wireRenterActions() {
         method: "POST",
         body: JSON.stringify({ amount, deposit: amount * 1.2, provider: "stripe", token: "tok_demo" }),
       });
+      toast("Payment confirmed — your suite is booked.", "success");
     } catch (err) {
-      if (err.status !== 403) alert(err.message);
+      if (err.status !== 403) toast(err.message, "error");
     }
     refreshRenterRequests();
   }));
   $$(".instr-btn").forEach((b) => b.addEventListener("click", async () => {
-    await api(`/api/requests/${b.dataset.id}/instructions`);
+    try {
+      await api(`/api/requests/${b.dataset.id}/instructions`);
+    } catch (err) {
+      toast(err.message, "error");
+    }
     refreshRenterRequests();
   }));
-  $$(".survey-btn").forEach((b) => b.addEventListener("click", async () => {
-    const boxExp = prompt("Rate the box experience (1-5):", "5");
-    const bookingExp = prompt("Rate the booking process (1-5):", "5");
-    if (!boxExp || !bookingExp) return;
-    await api(`/api/requests/${b.dataset.id}/survey`, {
-      method: "POST",
-      body: JSON.stringify({ box_experience: Number(boxExp), booking_experience: Number(bookingExp) }),
-    });
-    refreshRenterRequests();
+  $$(".survey-btn").forEach((b) => b.addEventListener("click", () => {
+    const dialog = $("#surveyDialog");
+    dialog.dataset.id = b.dataset.id;
+    $("#formSurvey").reset();
+    dialog.showModal();
   }));
 }
+
+$("#surveyCancel").addEventListener("click", () => $("#surveyDialog").close());
+$("#formSurvey").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const dialog = $("#surveyDialog");
+  const fd = Object.fromEntries(new FormData(e.target));
+  try {
+    await api(`/api/requests/${dialog.dataset.id}/survey`, {
+      method: "POST",
+      body: JSON.stringify({
+        box_experience: Number(fd.box_experience),
+        booking_experience: Number(fd.booking_experience),
+        comments: fd.comments || "",
+      }),
+    });
+    dialog.close();
+    toast("Thanks for the feedback!", "success");
+  } catch (err) {
+    dialog.close();
+    toast(err.message, "error");
+  }
+  refreshRenterRequests();
+});
 
 // ---------------------------------------------------------------------------
 // Init — restore the session (if any), then land on browse or auth
