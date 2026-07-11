@@ -6,56 +6,27 @@ Implements the "Booking Engine functionalities" section of the roadmap:
   - actions the owner object needs to perform
   - Feed functionality (for renter)
 
-This is an in-memory reference implementation. Swap the dict-based
-storage for a real database in production.
+Storage is SQLite via SQLAlchemy (see db.py / models.py). The engine is
+a thin service layer over the database session; feed scoring stays in
+Python since the datasets are prototype-sized.
 """
 
 from __future__ import annotations
 import datetime
-from dataclasses import dataclass, field
 from typing import Optional
 
+from sqlalchemy import select
+
+from db import db_session
 from models import (
-    new_id, PrivateBox, Stadium, Owner, Renter, Listing, BookingRecord, BoxRequest
+    new_id, PrivateBox, Stadium, Owner, Renter, Listing, BookingRecord,
+    BoxRequest, RentRequest,
 )
-
-
-# ---------------------------------------------------------------------------
-# Rent Request object
-# ---------------------------------------------------------------------------
-
-@dataclass
-class RentRequest:
-    """Created by Renter.create_rent_request(). Carries renter info so the
-    owner has enough context to evaluate the request."""
-    id: str
-    box_id: str
-    listing_id: str
-    renter_id: str
-    date: str
-    price: float
-    status: str = "pending"          # pending | accepted | rejected | paid | completed
-    reject_reason: Optional[str] = None
-    message: str = ""                 # optional note from renter to owner
-    renter_snapshot: dict = field(default_factory=dict)  # history/email/age/income/social, etc.
-    payment: Optional[dict] = None
-    instructions: Optional[str] = None
-    survey: Optional[dict] = None
-    created_at: str = field(default_factory=lambda: datetime.datetime.utcnow().isoformat())
 
 
 class BookingEngine:
     """Central engine tying together owners, renters, boxes, stadiums and
-    rent requests. In a production system this would be a service layer
-    over a real database; here it's an in-memory store for a working
-    prototype."""
-
-    def __init__(self):
-        self.owners: dict[str, Owner] = {}
-        self.renters: dict[str, Renter] = {}
-        self.boxes: dict[str, PrivateBox] = {}
-        self.stadiums: dict[str, Stadium] = {}
-        self.requests: dict[str, RentRequest] = {}
+    rent requests, backed by the SQLAlchemy session."""
 
     # =======================================================================
     # Owner actions
@@ -64,22 +35,21 @@ class BookingEngine:
     def create_owner_account(self, name: str, email: str, password: str,
                               location: str = "", social_media: Optional[dict] = None) -> Owner:
         owner = Owner(name, email, password, location, social_media)
-        self.owners[owner.id] = owner
+        db_session.add(owner)
+        db_session.commit()
         return owner
 
     def create_private_box(self, owner_id: str, stadium_id: str, capacity: int,
                             location_in_stadium: str = "", description: str = "") -> PrivateBox:
         """Called once an owner provides box details; creates the instance,
-        links it to the owner and to a stadium."""
-        if owner_id not in self.owners:
-            raise ValueError("Unknown owner")
-        if stadium_id not in self.stadiums:
+        linked to the owner and to a stadium via its foreign keys."""
+        self._get_owner(owner_id)
+        if db_session.get(Stadium, stadium_id) is None:
             raise ValueError("Unknown stadium")
 
         box = PrivateBox(owner_id, stadium_id, capacity, location_in_stadium, description)
-        self.boxes[box.id] = box
-        self.owners[owner_id].link_box(box.id)
-        self.stadiums[stadium_id].add_box(box.id)
+        db_session.add(box)
+        db_session.commit()
         return box
 
     def add_listing(self, box_id: str, date: str, price: float,
@@ -87,14 +57,18 @@ class BookingEngine:
         """Add Listing(): owner posts a date for which they want to rent
         their private box."""
         box = self._get_box(box_id)
-        return box.add_listing(date, price, capacity, description)
+        listing = box.add_listing(date, price, capacity, description)
+        db_session.commit()
+        return listing
 
     def remove_listing(self, box_id: str, date: str) -> bool:
         """Remove Listing(): remove a listing for a specific date; it
         disappears from the renters feed automatically since the feed is
         computed from available_dates."""
         box = self._get_box(box_id)
-        return box.remove_listing(date)
+        removed = box.remove_listing(date)
+        db_session.commit()
+        return removed
 
     # =======================================================================
     # Renter actions
@@ -103,12 +77,14 @@ class BookingEngine:
     def create_renter_account(self, name: str, email: str, password: str,
                                location: str = "", social_media: Optional[dict] = None) -> Renter:
         renter = Renter(name, email, password, location, social_media)
-        self.renters[renter.id] = renter
+        db_session.add(renter)
+        db_session.commit()
         return renter
 
     def save_preferences(self, renter_id: str, **prefs) -> Renter:
         renter = self._get_renter(renter_id)
         renter.save_preferences(**prefs)
+        db_session.commit()
         return renter
 
     def create_rent_request(self, renter_id: str, box_id: str, date: str,
@@ -125,8 +101,10 @@ class BookingEngine:
         if listing is None:
             raise ValueError("No listing available for that date")
 
+        # Snapshot the renter's track record BEFORE adding this request.
+        history_summary = self._renter_history_summary(renter)
+
         request = RentRequest(
-            id=new_id(),
             box_id=box_id,
             listing_id=listing.listing_id,
             renter_id=renter_id,
@@ -140,9 +118,8 @@ class BookingEngine:
                 "location": renter.location,
             },
         )
-        self.requests[request.id] = request
-        history_summary = self._renter_history_summary(renter)
-        renter.booking_history_ids.append(request.id)
+        db_session.add(request)
+        db_session.flush()  # assigns request.id before we mirror it on the box
 
         box.add_request(BoxRequest(
             request_id=request.id,
@@ -152,25 +129,20 @@ class BookingEngine:
             message=message,
             renter_history=history_summary,
         ))
+        db_session.commit()
         return self.process_rent_request(request)
 
     def _renter_history_summary(self, renter: Renter) -> list[dict]:
         """Summarized past requests for a renter (their own booking record,
         not the box's) — embedded onto each BoxRequest so an owner can
         gauge a renter's track record without a separate lookup."""
-        summary = []
-        for req_id in renter.booking_history_ids:
-            past = self.requests.get(req_id)
-            if past is None:
-                continue
-            summary.append({
-                "request_id": past.id,
-                "box_id": past.box_id,
-                "date": past.date,
-                "price": past.price,
-                "status": past.status,
-            })
-        return summary
+        return [{
+            "request_id": past.id,
+            "box_id": past.box_id,
+            "date": past.date,
+            "price": past.price,
+            "status": past.status,
+        } for past in renter.rent_requests]
 
     def submit_payment(self, request_id: str, provider: str, token: str,
                         amount: float, deposit: float) -> RentRequest:
@@ -185,7 +157,7 @@ class BookingEngine:
         if request.status != "paid":
             raise ValueError("Payment must be completed before instructions are released")
         box = self._get_box(request.box_id)
-        stadium = self.stadiums.get(box.stadium_id)
+        stadium = self.get_stadium(box.stadium_id)
         stadium_name = stadium.name if stadium else "the venue"
         instructions = (
             f"Your suite at {stadium_name} is confirmed for {request.date}. "
@@ -195,6 +167,7 @@ class BookingEngine:
         )
         request.instructions = instructions
         request.status = "completed"
+        db_session.commit()
         return instructions
 
     def post_visit_survey(self, request_id: str, box_experience: int,
@@ -207,6 +180,7 @@ class BookingEngine:
             "comments": comments,
         }
         request.survey = survey
+        db_session.commit()
         return survey
 
     # =======================================================================
@@ -225,14 +199,19 @@ class BookingEngine:
 
     def list_requests_for_owner(self, owner_id: str, box_id: Optional[str] = None,
                                  status: Optional[str] = None) -> list[RentRequest]:
-        owner = self._get_owner(owner_id)
-        owner_box_ids = set(owner.box_ids)
-        results = [r for r in self.requests.values() if r.box_id in owner_box_ids]
+        self._get_owner(owner_id)
+        stmt = (select(RentRequest)
+                .join(PrivateBox, RentRequest.box_id == PrivateBox.id)
+                .where(PrivateBox.owner_id == owner_id))
         if box_id:
-            results = [r for r in results if r.box_id == box_id]
+            stmt = stmt.where(RentRequest.box_id == box_id)
         if status:
-            results = [r for r in results if r.status == status]
-        return results
+            stmt = stmt.where(RentRequest.status == status)
+        return list(db_session.scalars(stmt))
+
+    def list_requests_for_renter(self, renter_id: str) -> list[RentRequest]:
+        stmt = select(RentRequest).where(RentRequest.renter_id == renter_id)
+        return list(db_session.scalars(stmt))
 
     def accept_booking(self, request_id: str) -> RentRequest:
         """Owner accepts one of possibly several pending requests for the
@@ -243,10 +222,16 @@ class BookingEngine:
         request.status = "accepted"
         self._get_box(request.box_id).set_request_status(request_id, "accepted")
 
-        for other in self.requests.values():
-            if (other.id != request.id and other.box_id == request.box_id
-                    and other.date == request.date and other.status == "pending"):
-                self.reject_booking(other.id, reason="Another earlier request was accepted for this box/date.")
+        others = db_session.scalars(
+            select(RentRequest).where(
+                RentRequest.id != request.id,
+                RentRequest.box_id == request.box_id,
+                RentRequest.date == request.date,
+                RentRequest.status == "pending",
+            ))
+        for other in others:
+            self.reject_booking(other.id, reason="Another earlier request was accepted for this box/date.")
+        db_session.commit()
         return request
 
     def reject_booking(self, request_id: str, reason: str = "The owner withdrew their listing.") -> RentRequest:
@@ -256,6 +241,7 @@ class BookingEngine:
         request.status = "rejected"
         request.reject_reason = reason
         self._get_box(request.box_id).set_request_status(request_id, "rejected", reason)
+        db_session.commit()
         return request
 
     def process_payment(self, request_id: str, provider: str, token: str,
@@ -275,7 +261,7 @@ class BookingEngine:
             "amount": amount,
             "deposit": deposit,
             "status": "in_escrow",
-            "paid_at": datetime.datetime.utcnow().isoformat(),
+            "paid_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
         }
         request.status = "paid"
 
@@ -288,24 +274,23 @@ class BookingEngine:
             price_rented=amount,
             price_owner_received=owner_share,
             renter_name=renter.name,
-            box_id=box.id,
             stadium_id=box.stadium_id,
             location_in_stadium=box.location_in_stadium,
             event_description=request.renter_snapshot.get("event_description", ""),
         ))
+        db_session.commit()
         return request
 
     def available_boxes(self, stadium_id: Optional[str] = None) -> list[dict]:
         """Available boxes(): queries all boxes to see which dates are
         available, sorted by date then stadium, for use in the renter feed."""
-        results = []
-        for box in self.boxes.values():
-            if stadium_id and box.stadium_id != stadium_id:
-                continue
-            for listing in box.available_dates:
-                results.append({"box": box, "listing": listing})
-        results.sort(key=lambda r: (r["listing"].date, r["box"].stadium_id))
-        return results
+        stmt = (select(Listing, PrivateBox)
+                .join(PrivateBox, Listing.box_id == PrivateBox.id)
+                .order_by(Listing.date, PrivateBox.stadium_id))
+        if stadium_id:
+            stmt = stmt.where(PrivateBox.stadium_id == stadium_id)
+        return [{"box": box, "listing": listing}
+                for listing, box in db_session.execute(stmt)]
 
     # =======================================================================
     # Feed functionality (for renter)
@@ -317,7 +302,7 @@ class BookingEngine:
         Uses a simple weighted-distance score (stand-in for a k-means-style
         multi-metric match: price proximity, location proximity, team match)."""
         renter = self._get_renter(renter_id)
-        prefs = renter.preferences
+        prefs = renter.preferences or {}
         candidates = self.available_boxes()
 
         scored = []
@@ -356,7 +341,7 @@ class BookingEngine:
         candidates = self.available_boxes()
 
         def distance(entry):
-            stadium = self.stadiums.get(entry["box"].stadium_id)
+            stadium = self.get_stadium(entry["box"].stadium_id)
             if not stadium or not renter.location:
                 return 0
             # Placeholder distance metric; swap for real geo distance
@@ -395,7 +380,7 @@ class BookingEngine:
         price range of roughly $5k-$20k — replace with a trained model or
         real market comps in production)."""
         base = 3000 + box.capacity * 300
-        stadium = self.stadiums.get(box.stadium_id)
+        stadium = self.get_stadium(box.stadium_id)
         premium = 1.05 if stadium else 1.0
         return round(base * premium, 2)
 
@@ -415,25 +400,40 @@ class BookingEngine:
     def create_stadium(self, name: str, city: str, latitude: float = 0.0,
                         longitude: float = 0.0) -> Stadium:
         stadium = Stadium(name, city, latitude, longitude)
-        self.stadiums[stadium.id] = stadium
+        db_session.add(stadium)
+        db_session.commit()
         return stadium
 
+    def list_stadiums(self) -> list[Stadium]:
+        return list(db_session.scalars(select(Stadium)))
+
+    def get_stadium(self, stadium_id: str) -> Optional[Stadium]:
+        return db_session.get(Stadium, stadium_id)
+
+    def get_user_by_email(self, email: str) -> Optional["Owner | Renter"]:
+        from models import User
+        return db_session.scalar(select(User).where(User.email == email))
+
     def _get_owner(self, owner_id: str) -> Owner:
-        if owner_id not in self.owners:
+        owner = db_session.get(Owner, owner_id)
+        if owner is None:
             raise ValueError("Unknown owner")
-        return self.owners[owner_id]
+        return owner
 
     def _get_renter(self, renter_id: str) -> Renter:
-        if renter_id not in self.renters:
+        renter = db_session.get(Renter, renter_id)
+        if renter is None:
             raise ValueError("Unknown renter")
-        return self.renters[renter_id]
+        return renter
 
     def _get_box(self, box_id: str) -> PrivateBox:
-        if box_id not in self.boxes:
+        box = db_session.get(PrivateBox, box_id)
+        if box is None:
             raise ValueError("Unknown private box")
-        return self.boxes[box_id]
+        return box
 
     def _get_request(self, request_id: str) -> RentRequest:
-        if request_id not in self.requests:
+        request = db_session.get(RentRequest, request_id)
+        if request is None:
             raise ValueError("Unknown rent request")
-        return self.requests[request_id]
+        return request
