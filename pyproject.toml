@@ -1,0 +1,12 @@
+[project]
+name = "palcos"
+version = "0.1.0"
+description = "Palcos - private stadium box rental marketplace prototype"
+requires-python = ">=3.12"
+dependencies = [
+    "flask>=3.0",
+    "sqlalchemy>=2.0",
+]
+
+[tool.uv]
+package = false
