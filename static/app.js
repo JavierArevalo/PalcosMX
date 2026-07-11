@@ -1,11 +1,13 @@
 // ---------------------------------------------------------------------------
-// State (kept in memory for this session — demo IDs from account creation)
+// State — identity lives in the server session cookie; `user` mirrors
+// GET /api/auth/me. demoCode holds the simulated-email confirmation code
+// returned at signup so the confirm screen can display it.
 // ---------------------------------------------------------------------------
 const state = {
   stadiums: [],
-  ownerId: null,
-  renterId: null,
+  user: null,
   ownerBoxes: [],
+  demoCode: null,
 };
 
 const $ = (sel) => document.querySelector(sel);
@@ -17,29 +19,257 @@ async function api(path, options = {}) {
     ...options,
   });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || "Request failed");
+  if (!res.ok) {
+    if (data.needs_confirmation) showConfirmBanner();
+    const e = new Error(data.error || "Request failed");
+    e.status = res.status;
+    throw e;
+  }
   return data;
 }
 
 // ---------------------------------------------------------------------------
-// Tabs
+// Views (auth -> confirm -> prefs -> app) + tabs
 // ---------------------------------------------------------------------------
+const ONBOARD_VIEWS = ["viewAuth", "viewConfirm", "viewPrefs"];
+
+function showView(id) {
+  ONBOARD_VIEWS.forEach((v) => $(`#${v}`).classList.remove("active"));
+  $$(".tab-panel[id^='panel-']").forEach((p) => p.classList.remove("active"));
+  if (ONBOARD_VIEWS.includes(id)) {
+    $(`#${id}`).classList.add("active");
+    $("#mainTabs").classList.add("hidden");
+  } else {
+    $("#mainTabs").classList.remove("hidden");
+    $(`#panel-${id}`).classList.add("active");
+    $$(".tab-btn").forEach((b) => b.classList.toggle("active", b.dataset.tab === id));
+  }
+}
+
 $$(".tab-btn").forEach((btn) => {
   btn.addEventListener("click", () => {
-    $$(".tab-btn").forEach((b) => b.classList.remove("active"));
-    $$(".tab-panel").forEach((p) => p.classList.remove("active"));
-    btn.classList.add("active");
-    $(`#panel-${btn.dataset.tab}`).classList.add("active");
+    showView(btn.dataset.tab);
+    // refresh the tab's data so status changes made by the other side
+    // (e.g. an owner accepting) show up without a full page reload
+    if (btn.dataset.tab === "browse") loadListings();
+    if (btn.dataset.tab === "renter" && state.user?.role === "renter") refreshRenterRequests();
+    if (btn.dataset.tab === "owner" && state.user?.role === "owner") {
+      loadOwnerBoxes();
+      refreshOwnerRequests();
+    }
   });
 });
 
-// scoreboard clock
-function tickClock() {
-  const now = new Date();
-  $("#clockNow").textContent = now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+// ---------------------------------------------------------------------------
+// Header (user chip, login/logout) + role gating
+// ---------------------------------------------------------------------------
+function renderHeader() {
+  const u = state.user;
+  $("#userChip").classList.toggle("hidden", !u);
+  $("#btnLogout").classList.toggle("hidden", !u);
+  $("#btnShowAuth").classList.toggle("hidden", !!u);
+  $("#tabOwner").classList.toggle("hidden", !u || u.role !== "owner");
+  $("#tabRenter").classList.toggle("hidden", !u || u.role !== "renter");
+  if (u) {
+    $("#chipName").textContent = u.name;
+    $("#chipRole").textContent = u.role;
+    $("#chipUnconfirmed").classList.toggle("hidden", u.confirmed);
+  }
+
+  const renter = u && u.role === "renter";
+  $("#btnSuggest").disabled = !renter;
+  $("#btnNearMe").disabled = !renter;
+  $("#browseIdentity").textContent = u
+    ? `Browsing as ${u.name} (${u.role})`
+    : "Browsing as guest — log in as a renter to request a suite.";
 }
-setInterval(tickClock, 1000 * 30);
-tickClock();
+
+function showConfirmBanner() {
+  const u = state.user;
+  const show = !!u && !u.confirmed;
+  $("#confirmBanner").classList.toggle("hidden", !show);
+  if (show && state.demoCode) {
+    $("#bannerCodeHint").textContent = `(demo code: ${state.demoCode})`;
+    $("#bannerCodeHint").classList.remove("hidden");
+  }
+}
+
+async function showApp() {
+  renderHeader();
+  showConfirmBanner();
+  showView("browse");
+  await loadListings();
+  if (state.user?.role === "owner") {
+    await loadOwnerBoxes();
+    await refreshOwnerRequests();
+  } else if (state.user?.role === "renter") {
+    fillPrefsForm($("#formPrefs"), state.user.preferences || {});
+    await refreshRenterRequests();
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Auth: login / signup (Screen 1) / confirm (Screen 2) / logout
+// ---------------------------------------------------------------------------
+$("#formLogin").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const fd = Object.fromEntries(new FormData(e.target));
+  try {
+    state.user = await api("/api/auth/login", { method: "POST", body: JSON.stringify(fd) });
+    state.demoCode = null;
+    e.target.reset();
+    await showApp();
+  } catch (err) {
+    $("#loginHint").textContent = err.message;
+  }
+});
+
+$("#formSignup").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const fd = Object.fromEntries(new FormData(e.target));
+  const payload = {
+    role: fd.role,
+    name: fd.name,
+    email: fd.email,
+    password: fd.password,
+    location: fd.location,
+    social_media: fd.social_handle ? { [fd.social_platform]: fd.social_handle } : {},
+  };
+  try {
+    const me = await api("/api/auth/signup", { method: "POST", body: JSON.stringify(payload) });
+    state.demoCode = me.demo_confirmation_code;
+    delete me.demo_confirmation_code;
+    state.user = me;
+    e.target.reset();
+    $("#demoCode").textContent = state.demoCode;
+    renderHeader();
+    showView("viewConfirm");
+  } catch (err) {
+    $("#signupHint").textContent = err.message;
+  }
+});
+
+// The social row is required for renters only (roadmap: owners vet renters
+// through their socials).
+$$("#formSignup input[name='role']").forEach((r) =>
+  r.addEventListener("change", () => {
+    const isRenter = $("#formSignup input[name='role']:checked").value === "renter";
+    $("#formSignup input[name='social_handle']").required = isRenter;
+    $("#socialHint").textContent = isRenter
+      ? "Renters must link at least one social account — owners use it to vet requests."
+      : "Optional for owners.";
+  })
+);
+$("#formSignup input[name='social_handle']").required = true;
+
+async function confirmWithCode(code, hintEl) {
+  try {
+    state.user = await api("/api/auth/confirm", { method: "POST", body: JSON.stringify({ code }) });
+    state.demoCode = null;
+    if (state.user.role === "renter") {
+      renderPrefStadiums($("#prefStadiums"));
+      showView("viewPrefs");
+      renderHeader();
+      showConfirmBanner();
+    } else {
+      await showApp();
+    }
+  } catch (err) {
+    hintEl.textContent = err.message;
+  }
+}
+
+$("#formConfirm").addEventListener("submit", (e) => {
+  e.preventDefault();
+  confirmWithCode($("#confirmCode").value.trim(), $("#confirmHint"));
+});
+
+$("#bannerConfirmBtn").addEventListener("click", () => {
+  confirmWithCode($("#bannerCode").value.trim(), $("#bannerHint"));
+});
+
+async function resendCode(hintEl) {
+  try {
+    const d = await api("/api/auth/resend-code", { method: "POST" });
+    state.demoCode = d.demo_confirmation_code;
+    $("#demoCode").textContent = state.demoCode;
+    hintEl.textContent = "New code sent (see above / server log).";
+    showConfirmBanner();
+  } catch (err) {
+    hintEl.textContent = err.message;
+  }
+}
+$("#btnResendCode").addEventListener("click", () => resendCode($("#confirmHint")));
+$("#bannerResendBtn").addEventListener("click", () => resendCode($("#bannerHint")));
+
+$("#btnSkipConfirm").addEventListener("click", () => showApp());
+
+$("#btnLogout").addEventListener("click", async () => {
+  await api("/api/auth/logout", { method: "POST" });
+  state.user = null;
+  state.demoCode = null;
+  state.ownerBoxes = [];
+  renderHeader();
+  showConfirmBanner();
+  showView("viewAuth");
+});
+
+$("#btnShowAuth").addEventListener("click", () => showView("viewAuth"));
+$("#btnBackToBrowse").addEventListener("click", () => showView("browse"));
+
+// ---------------------------------------------------------------------------
+// Preferences (Screen 3 onboarding + the My Reservations tab share logic)
+// ---------------------------------------------------------------------------
+function renderPrefStadiums(container, selected = []) {
+  container.innerHTML = state.stadiums
+    .map((s) => `<label><input type="checkbox" name="preferred_stadiums" value="${s.id}"
+      ${selected.includes(s.id) ? "checked" : ""}> ${s.name} — ${s.city}</label>`)
+    .join("");
+}
+
+function fillPrefsForm(form, prefs) {
+  form.price_min.value = prefs.price_min ?? "";
+  form.price_max.value = prefs.price_max ?? "";
+  form.capacity_bucket.value = prefs.capacity_bucket ?? "";
+  form.preferred_teams.value = (prefs.preferred_teams || []).join(", ");
+  form.location.value = state.user?.location || "";
+  renderPrefStadiums(form.querySelector(".check-grid"), prefs.preferred_stadiums || []);
+}
+
+async function submitPrefs(form, hintEl) {
+  const payload = {
+    price_min: form.price_min.value || null,
+    price_max: form.price_max.value || null,
+    capacity_bucket: form.capacity_bucket.value || null,
+    preferred_stadiums: Array.from(form.querySelectorAll("input[name='preferred_stadiums']:checked")).map((c) => c.value),
+    preferred_teams: form.preferred_teams.value.split(",").map((t) => t.trim()).filter(Boolean),
+    location: form.location.value || null,
+  };
+  const me = await api("/api/my/preferences", { method: "PUT", body: JSON.stringify(payload) });
+  state.user = { ...state.user, preferences: me.preferences, location: me.location };
+  if (hintEl) hintEl.textContent = "Preferences saved.";
+}
+
+$("#formOnboardPrefs").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  try {
+    await submitPrefs(e.target, null);
+    await showApp();
+  } catch (err) {
+    $("#onboardPrefsHint").textContent = err.message;
+  }
+});
+
+$("#btnSkipPrefs").addEventListener("click", () => showApp());
+
+$("#formPrefs").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  try {
+    await submitPrefs(e.target, $("#prefsHint"));
+  } catch (err) {
+    $("#prefsHint").textContent = err.message;
+  }
+});
 
 // ---------------------------------------------------------------------------
 // Stadiums (shared across tabs)
@@ -88,20 +318,24 @@ function renderListings(entries, deal = false) {
 
 async function onRequestClick(e) {
   const { box: boxId, date } = e.target.dataset;
-  if (!state.renterId) {
-    alert("Pick or create a renter account first (My Reservations tab), then select it in the browsing bar.");
+  if (!state.user) {
+    showView("viewAuth");
+    return;
+  }
+  if (state.user.role !== "renter") {
+    alert("Requests are for renter accounts — you're logged in as an owner.");
     return;
   }
   const message = prompt("Add a note for the owner (optional):", "") || "";
   try {
     await api("/api/requests", {
       method: "POST",
-      body: JSON.stringify({ renter_id: state.renterId, box_id: boxId, date, message }),
+      body: JSON.stringify({ box_id: boxId, date, message }),
     });
     alert("Request sent to the owner. Track its status under My Reservations.");
     refreshRenterRequests();
   } catch (err) {
-    alert(err.message);
+    if (err.status !== 403) alert(err.message);
   }
 }
 
@@ -125,70 +359,33 @@ $("#btnBestDeals").addEventListener("click", async () => {
   renderListings(deals, true);
 });
 $("#btnSuggest").addEventListener("click", async () => {
-  if (!state.renterId) return;
-  const entries = await api(`/api/feed/suggest/${state.renterId}`);
+  const entries = await api("/api/feed/suggest");
   renderListings(entries);
 });
 $("#btnNearMe").addEventListener("click", async () => {
-  if (!state.renterId) return;
-  const entries = await api(`/api/feed/by-location/${state.renterId}`);
+  const entries = await api("/api/feed/by-location");
   renderListings(entries);
-});
-
-function refreshRenterDropdown() {
-  const sel = $("#renterSelect");
-  const opts = state.renterId
-    ? `<option value="${state.renterId}" selected>${state.renterId}</option>`
-    : "";
-  sel.innerHTML = `<option value="">— none, showing all listings —</option>${opts}`;
-  const enabled = !!state.renterId;
-  $("#btnSuggest").disabled = !enabled;
-  $("#btnNearMe").disabled = !enabled;
-}
-$("#renterSelect").addEventListener("change", (e) => {
-  state.renterId = e.target.value || null;
-  $("#btnSuggest").disabled = !state.renterId;
-  $("#btnNearMe").disabled = !state.renterId;
 });
 
 // ---------------------------------------------------------------------------
 // Owner tab
 // ---------------------------------------------------------------------------
-$("#formOwner").addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const fd = new FormData(e.target);
-  try {
-    const owner = await api("/api/owners", {
-      method: "POST",
-      body: JSON.stringify(Object.fromEntries(fd)),
-    });
-    state.ownerId = owner.id;
-    $("#ownerHint").textContent = `Account created. Owner ID: ${owner.id}`;
-    refreshOwnerRequests();
-  } catch (err) {
-    $("#ownerHint").textContent = err.message;
-  }
-});
+async function loadOwnerBoxes() {
+  state.ownerBoxes = await api("/api/my/boxes");
+  $("#ownerBoxSelect").innerHTML =
+    `<option value="">Select your box…</option>` +
+    state.ownerBoxes.map((b) => `<option value="${b.id}">${b.description || b.id} — cap ${b.capacity}</option>`).join("");
+}
 
 $("#formBox").addEventListener("submit", async (e) => {
   e.preventDefault();
-  if (!state.ownerId) {
-    $("#boxHint").textContent = "Create an owner account first.";
-    return;
-  }
   const fd = Object.fromEntries(new FormData(e.target));
   fd.capacity = Number(fd.capacity);
   try {
-    const box = await api(`/api/owners/${state.ownerId}/boxes`, {
-      method: "POST",
-      body: JSON.stringify(fd),
-    });
-    $("#boxHint").textContent = `Box created (ID ${box.id}).`;
-    state.ownerBoxes.push(box);
-    $("#ownerBoxSelect").innerHTML =
-      `<option value="">Select your box…</option>` +
-      state.ownerBoxes.map((b) => `<option value="${b.id}">${b.description || b.id} — cap ${b.capacity}</option>`).join("");
+    await api("/api/my/boxes", { method: "POST", body: JSON.stringify(fd) });
+    $("#boxHint").textContent = "Box created.";
     e.target.reset();
+    await loadOwnerBoxes();
   } catch (err) {
     $("#boxHint").textContent = err.message;
   }
@@ -213,11 +410,7 @@ $("#formListing").addEventListener("submit", async (e) => {
 
 async function refreshOwnerRequests() {
   const box = $("#ownerRequests");
-  if (!state.ownerId) {
-    box.innerHTML = `<p class="empty-state">Create an owner account to see requests.</p>`;
-    return;
-  }
-  const reqs = await api(`/api/owners/${state.ownerId}/requests`);
+  const reqs = await api("/api/my/requests");
   if (!reqs.length) {
     box.innerHTML = `<p class="empty-state">No requests yet.</p>`;
     return;
@@ -246,11 +439,19 @@ function reqRow(r) {
 
 function wireOwnerActions() {
   $$(".accept-btn").forEach((b) => b.addEventListener("click", async () => {
-    await api(`/api/requests/${b.dataset.id}/accept`, { method: "POST" });
+    try {
+      await api(`/api/requests/${b.dataset.id}/accept`, { method: "POST" });
+    } catch (err) {
+      if (err.status !== 403) alert(err.message);
+    }
     refreshOwnerRequests();
   }));
   $$(".reject-btn").forEach((b) => b.addEventListener("click", async () => {
-    await api(`/api/requests/${b.dataset.id}/reject`, { method: "POST", body: JSON.stringify({}) });
+    try {
+      await api(`/api/requests/${b.dataset.id}/reject`, { method: "POST", body: JSON.stringify({}) });
+    } catch (err) {
+      if (err.status !== 403) alert(err.message);
+    }
     refreshOwnerRequests();
   }));
 }
@@ -258,44 +459,9 @@ function wireOwnerActions() {
 // ---------------------------------------------------------------------------
 // Renter tab
 // ---------------------------------------------------------------------------
-$("#formRenter").addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const fd = Object.fromEntries(new FormData(e.target));
-  try {
-    const renter = await api("/api/renters", { method: "POST", body: JSON.stringify(fd) });
-    state.renterId = renter.id;
-    $("#renterHint").textContent = `Account created. Renter ID: ${renter.id}`;
-    refreshRenterDropdown();
-    refreshRenterRequests();
-  } catch (err) {
-    $("#renterHint").textContent = err.message;
-  }
-});
-
-$("#formPrefs").addEventListener("submit", async (e) => {
-  e.preventDefault();
-  if (!state.renterId) {
-    $("#prefsHint").textContent = "Create a renter account first.";
-    return;
-  }
-  const fd = Object.fromEntries(new FormData(e.target));
-  if (fd.price_min) fd.price_min = Number(fd.price_min);
-  if (fd.price_max) fd.price_max = Number(fd.price_max);
-  try {
-    await api(`/api/renters/${state.renterId}/preferences`, { method: "PUT", body: JSON.stringify(fd) });
-    $("#prefsHint").textContent = "Preferences saved.";
-  } catch (err) {
-    $("#prefsHint").textContent = err.message;
-  }
-});
-
 async function refreshRenterRequests() {
   const box = $("#renterRequests");
-  if (!state.renterId) {
-    box.innerHTML = `<p class="empty-state">Create a renter account to track requests.</p>`;
-    return;
-  }
-  const reqs = await api(`/api/renters/${state.renterId}/requests`);
+  const reqs = await api("/api/my/requests");
   if (!reqs.length) {
     box.innerHTML = `<p class="empty-state">No requests yet — browse suites to send one.</p>`;
     return;
@@ -330,10 +496,14 @@ function renterReqRow(r) {
 function wireRenterActions() {
   $$(".pay-btn").forEach((b) => b.addEventListener("click", async () => {
     const amount = Number(b.dataset.amount);
-    await api(`/api/requests/${b.dataset.id}/payment`, {
-      method: "POST",
-      body: JSON.stringify({ amount, deposit: amount * 1.2, provider: "stripe", token: "tok_demo" }),
-    });
+    try {
+      await api(`/api/requests/${b.dataset.id}/payment`, {
+        method: "POST",
+        body: JSON.stringify({ amount, deposit: amount * 1.2, provider: "stripe", token: "tok_demo" }),
+      });
+    } catch (err) {
+      if (err.status !== 403) alert(err.message);
+    }
     refreshRenterRequests();
   }));
   $$(".instr-btn").forEach((b) => b.addEventListener("click", async () => {
@@ -353,10 +523,20 @@ function wireRenterActions() {
 }
 
 // ---------------------------------------------------------------------------
-// Init
+// Init — restore the session (if any), then land on browse or auth
 // ---------------------------------------------------------------------------
 (async function init() {
   await loadStadiums();
-  await loadListings();
-  refreshRenterDropdown();
+  try {
+    state.user = await api("/api/auth/me");
+  } catch {
+    state.user = null;
+  }
+  if (state.user) {
+    await showApp();
+  } else {
+    renderHeader();
+    await loadListings();
+    showView("browse");
+  }
 })();
