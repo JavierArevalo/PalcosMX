@@ -109,7 +109,6 @@ def _new_confirmation_code(user: User) -> str:
     """Simulated Screen-2 email: generate + 'send' (log) a 6-digit code."""
     code = f"{secrets.randbelow(1_000_000):06d}"
     user.confirmation_code = code
-    db_session.commit()
     print(f"[palcos] Simulated confirmation email to {user.email}: your code is {code}")
     return code
 
@@ -161,7 +160,6 @@ def confirm():
     if not code or code != user.confirmation_code:
         return jsonify({"error": "Invalid confirmation code"}), 400
     user.confirm_account()
-    db_session.commit()
     return jsonify(_me_json(user))
 
 

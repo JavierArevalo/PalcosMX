@@ -29,14 +29,29 @@ app.register_blueprint(auth.bp)
 init_db()
 
 
+@app.after_request
+def commit_on_success(response):
+    """Unit of work: the request owns the transaction. Engine/auth code only
+    flushes; nothing hits the database unless the request succeeds."""
+    if response.status_code < 400:
+        db_session.commit()
+    else:
+        db_session.rollback()
+    return response
+
+
 @app.teardown_appcontext
 def shutdown_session(exception=None):
+    # Also rolls back anything a crashed request left un-committed
+    # (after_request is skipped on unhandled exceptions).
     db_session.remove()
 
 
 # ---------------------------------------------------------------------------
 # Demo seed data so the site isn't empty on first load (only when the
 # database is empty — data persists in palcos.db across restarts).
+# Runs as ONE transaction with a single commit at the end, so an interrupted
+# startup leaves the database untouched instead of half-seeded.
 # ---------------------------------------------------------------------------
 
 def seed():
@@ -52,7 +67,6 @@ def seed():
     owner_jalisco = engine.create_owner_account("Mariana Ochoa", "mariana@example.com", "pw", "Guadalajara")
     for o in (owner_azteca, owner_monterrey, owner_jalisco):
         o.confirm_account()
-    db_session.commit()
 
     # Each tuple: (owner, stadium, capacity, location_in_stadium, description, listing_date, price, event_description)
     box_specs = [
@@ -91,6 +105,8 @@ def seed():
         box = engine.create_private_box(owner.id, stadium.id, capacity=capacity,
                                          location_in_stadium=location, description=box_desc)
         engine.add_listing(box.id, date, price, description=event_desc)
+
+    db_session.commit()
 
 
 seed()
@@ -277,7 +293,6 @@ def api_save_preferences():
 
     if d.get("location"):
         user.location = str(d["location"])
-        db_session.commit()
 
     r = engine.save_preferences(user.id, **prefs)
     return jsonify(r.to_dict())
