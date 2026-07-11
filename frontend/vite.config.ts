@@ -1,0 +1,24 @@
+import tailwindcss from "@tailwindcss/vite";
+import react from "@vitejs/plugin-react";
+import path from "node:path";
+import { defineConfig } from "vite";
+
+export default defineConfig({
+  plugins: [react(), tailwindcss()],
+  resolve: {
+    alias: {
+      "@": path.resolve(import.meta.dirname, "src"),
+    },
+  },
+  server: {
+    port: 3000,
+    // The Flask backend owns /api; cookies stay same-origin through the proxy.
+    proxy: {
+      "/api": { target: "http://localhost:5050", changeOrigin: true },
+    },
+  },
+  build: {
+    outDir: "dist",
+    emptyOutDir: true,
+  },
+});
