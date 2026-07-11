@@ -3,23 +3,46 @@ app.py
 Flask REST API + website for Palcos, wired on top of booking_engine.py.
 
 Run:
-    pip install -r requirements.txt
-    python app.py
-Then open http://localhost:5000
+    uv sync
+    uv run python app.py
+Then open http://localhost:5050
 """
 
+import os
+
 from flask import Flask, request, jsonify, render_template
+from db import db_session, init_db
+from models import Stadium
 from booking_engine import BookingEngine
+import auth
+from auth import current_user, login_required, role_required, confirmed_required
 
 app = Flask(__name__)
+# Signs the session cookie. Fine for local dev; set PALCOS_SECRET_KEY for
+# anything shared.
+app.secret_key = os.environ.get("PALCOS_SECRET_KEY", "dev-only-secret-change-me")
 engine = BookingEngine()
+
+auth.init_auth(engine)
+app.register_blueprint(auth.bp)
+
+init_db()
+
+
+@app.teardown_appcontext
+def shutdown_session(exception=None):
+    db_session.remove()
 
 
 # ---------------------------------------------------------------------------
-# Demo seed data so the site isn't empty on first load
+# Demo seed data so the site isn't empty on first load (only when the
+# database is empty — data persists in palcos.db across restarts).
 # ---------------------------------------------------------------------------
 
 def seed():
+    if db_session.query(Stadium).count() > 0:
+        return
+
     azteca = engine.create_stadium("Azteca Stadium", "Mexico City")
     monterrey = engine.create_stadium("Monterrey Stadium", "Monterrey")
     jalisco = engine.create_stadium("Jalisco Stadium", "Guadalajara")
@@ -29,6 +52,7 @@ def seed():
     owner_jalisco = engine.create_owner_account("Mariana Ochoa", "mariana@example.com", "pw", "Guadalajara")
     for o in (owner_azteca, owner_monterrey, owner_jalisco):
         o.confirm_account()
+    db_session.commit()
 
     # Each tuple: (owner, stadium, capacity, location_in_stadium, description, listing_date, price, event_description)
     box_specs = [
@@ -87,7 +111,7 @@ def index():
 
 def entry_to_json(entry):
     box, listing = entry["box"], entry["listing"]
-    stadium = engine.stadiums.get(box.stadium_id)
+    stadium = engine.get_stadium(box.stadium_id)
     return {
         "listing_id": listing.listing_id,
         "date": listing.date,
@@ -122,7 +146,7 @@ def err(e, code=400):
 
 @app.get("/api/stadiums")
 def api_list_stadiums():
-    return jsonify([s.to_dict() for s in engine.stadiums.values()])
+    return jsonify([s.to_dict() for s in engine.list_stadiums()])
 
 
 @app.post("/api/stadiums")
@@ -136,107 +160,127 @@ def api_create_stadium():
 
 
 # ---------------------------------------------------------------------------
-# Owner account + boxes
+# Owner boxes (identity from session — account creation lives in /api/auth)
 # ---------------------------------------------------------------------------
 
-@app.post("/api/owners")
-def api_create_owner():
-    d = request.json or {}
+def _owned_box_or_error(box_id):
+    """Load a box and verify it belongs to the session owner.
+    Returns (box, None) or (None, error response)."""
     try:
-        o = engine.create_owner_account(d["name"], d["email"], d["password"],
-                                         d.get("location", ""), d.get("social_media"))
-        return jsonify({"id": o.id, "name": o.name, "email": o.email}), 201
-    except KeyError as e:
-        return err(f"Missing field: {e}")
+        box = engine._get_box(box_id)
+    except ValueError as e:
+        return None, err(e, 404)
+    if box.owner_id != current_user().id:
+        return None, (jsonify({"error": "That box belongs to another owner"}), 403)
+    return box, None
 
 
-@app.post("/api/owners/<owner_id>/boxes")
-def api_create_box(owner_id):
+@app.post("/api/my/boxes")
+@role_required("owner")
+@confirmed_required
+def api_create_box():
     d = request.json or {}
     try:
-        box = engine.create_private_box(owner_id, d["stadium_id"], int(d["capacity"]),
+        box = engine.create_private_box(current_user().id, d["stadium_id"], int(d["capacity"]),
                                          d.get("location_in_stadium", ""), d.get("description", ""))
         return jsonify(box.to_dict()), 201
     except (KeyError, ValueError) as e:
         return err(e)
 
 
-@app.get("/api/owners/<owner_id>/boxes")
-def api_owner_boxes(owner_id):
-    try:
-        owner = engine._get_owner(owner_id)
-    except ValueError as e:
-        return err(e, 404)
-    return jsonify([engine.boxes[bid].to_dict() for bid in owner.box_ids])
+@app.get("/api/my/boxes")
+@role_required("owner")
+def api_my_boxes():
+    return jsonify([box.to_dict() for box in current_user().boxes])
 
 
 @app.post("/api/boxes/<box_id>/listings")
+@role_required("owner")
+@confirmed_required
 def api_add_listing(box_id):
+    box, error = _owned_box_or_error(box_id)
+    if error:
+        return error
     d = request.json or {}
     try:
-        listing = engine.add_listing(box_id, d["date"], float(d["price"]),
+        listing = engine.add_listing(box.id, d["date"], float(d["price"]),
                                       d.get("capacity"), d.get("description", ""))
-        return jsonify(listing.__dict__), 201
+        return jsonify(listing.to_dict()), 201
     except (KeyError, ValueError) as e:
         return err(e)
 
 
 @app.get("/api/boxes/<box_id>/requests")
+@role_required("owner")
 def api_box_requests(box_id):
     """Detailed requests for a box (optionally filtered to one date),
     including who requested, their message, and their booking history —
-    the BoxRequest view, as opposed to /api/owners/<id>/requests which
-    returns the engine's lifecycle-level RentRequest objects."""
+    the BoxRequest view, as opposed to /api/my/requests which returns the
+    engine's lifecycle-level RentRequest objects."""
+    box, error = _owned_box_or_error(box_id)
+    if error:
+        return error
     date = request.args.get("date")
-    try:
-        box = engine._get_box(box_id)
-    except ValueError as e:
-        return err(e, 404)
-    return jsonify([r.__dict__ for r in box.get_requests(date)])
+    return jsonify([r.to_dict() for r in box.get_requests(date)])
 
 
 @app.delete("/api/boxes/<box_id>/listings/<date>")
+@role_required("owner")
+@confirmed_required
 def api_remove_listing(box_id, date):
-    try:
-        removed = engine.remove_listing(box_id, date)
-        return jsonify({"removed": removed})
-    except ValueError as e:
-        return err(e, 404)
-
-
-@app.get("/api/owners/<owner_id>/requests")
-def api_owner_requests(owner_id):
-    status = request.args.get("status")
-    try:
-        reqs = engine.list_requests_for_owner(owner_id, status=status)
-        return jsonify([request_to_json(r) for r in reqs])
-    except ValueError as e:
-        return err(e, 404)
+    box, error = _owned_box_or_error(box_id)
+    if error:
+        return error
+    removed = engine.remove_listing(box.id, date)
+    return jsonify({"removed": removed})
 
 
 # ---------------------------------------------------------------------------
-# Renter account + preferences
+# My requests / preferences (role-aware, identity from session)
 # ---------------------------------------------------------------------------
 
-@app.post("/api/renters")
-def api_create_renter():
-    d = request.json or {}
-    try:
-        r = engine.create_renter_account(d["name"], d["email"], d["password"],
-                                          d.get("location", ""), d.get("social_media"))
-        return jsonify(r.to_dict()), 201
-    except KeyError as e:
-        return err(f"Missing field: {e}")
+@app.get("/api/my/requests")
+@login_required
+def api_my_requests():
+    user = current_user()
+    if user.role == "owner":
+        status = request.args.get("status")
+        reqs = engine.list_requests_for_owner(user.id, status=status)
+    else:
+        reqs = engine.list_requests_for_renter(user.id)
+    return jsonify([request_to_json(r) for r in reqs])
 
 
-@app.put("/api/renters/<renter_id>/preferences")
-def api_save_preferences(renter_id):
+@app.put("/api/my/preferences")
+@role_required("renter")
+def api_save_preferences():
+    """Screen 3: renter preferences. Accepts price_min/price_max (numbers),
+    capacity_bucket, preferred_stadiums (stadium-id list), preferred_teams
+    (string list), and optionally location (updates the profile field that
+    filter_by_location reads)."""
+    user = current_user()
     d = request.json or {}
+    prefs = {}
     try:
-        r = engine.save_preferences(renter_id, **d)
-        return jsonify(r.to_dict())
+        for key in ("price_min", "price_max"):
+            if d.get(key) not in (None, ""):
+                prefs[key] = float(d[key])
+        if d.get("capacity_bucket"):
+            prefs["capacity_bucket"] = str(d["capacity_bucket"])
+        for key in ("preferred_stadiums", "preferred_teams"):
+            if d.get(key) is not None:
+                if not isinstance(d[key], list):
+                    return err(f"{key} must be a list")
+                prefs[key] = [str(v) for v in d[key]]
     except ValueError as e:
-        return err(e, 404)
+        return err(e)
+
+    if d.get("location"):
+        user.location = str(d["location"])
+        db_session.commit()
+
+    r = engine.save_preferences(user.id, **prefs)
+    return jsonify(r.to_dict())
 
 
 # ---------------------------------------------------------------------------
@@ -249,20 +293,16 @@ def api_feed_available():
     return jsonify([entry_to_json(e) for e in engine.available_boxes(stadium_id)])
 
 
-@app.get("/api/feed/suggest/<renter_id>")
-def api_feed_suggest(renter_id):
-    try:
-        return jsonify([entry_to_json(e) for e in engine.suggest_stadium(renter_id)])
-    except ValueError as e:
-        return err(e, 404)
+@app.get("/api/feed/suggest")
+@role_required("renter")
+def api_feed_suggest():
+    return jsonify([entry_to_json(e) for e in engine.suggest_stadium(current_user().id)])
 
 
-@app.get("/api/feed/by-location/<renter_id>")
-def api_feed_by_location(renter_id):
-    try:
-        return jsonify([entry_to_json(e) for e in engine.filter_by_location(renter_id)])
-    except ValueError as e:
-        return err(e, 404)
+@app.get("/api/feed/by-location")
+@role_required("renter")
+def api_feed_by_location():
+    return jsonify([entry_to_json(e) for e in engine.filter_by_location(current_user().id)])
 
 
 @app.get("/api/feed/by-stadium/<stadium_id>")
@@ -287,40 +327,72 @@ def api_feed_best_deals():
 # Rent request lifecycle
 # ---------------------------------------------------------------------------
 
+def _owned_request_or_error(request_id):
+    """Load a rent request and verify its box belongs to the session owner."""
+    try:
+        r = engine._get_request(request_id)
+    except ValueError as e:
+        return None, err(e, 404)
+    if engine._get_box(r.box_id).owner_id != current_user().id:
+        return None, (jsonify({"error": "That request is for another owner's box"}), 403)
+    return r, None
+
+
+def _renters_request_or_error(request_id):
+    """Load a rent request and verify it belongs to the session renter."""
+    try:
+        r = engine._get_request(request_id)
+    except ValueError as e:
+        return None, err(e, 404)
+    if r.renter_id != current_user().id:
+        return None, (jsonify({"error": "That request belongs to another renter"}), 403)
+    return r, None
+
+
 @app.post("/api/requests")
+@role_required("renter")
+@confirmed_required
 def api_create_request():
     d = request.json or {}
     try:
-        r = engine.create_rent_request(d["renter_id"], d["box_id"], d["date"], d.get("message", ""))
+        r = engine.create_rent_request(current_user().id, d["box_id"], d["date"], d.get("message", ""))
         return jsonify(request_to_json(r)), 201
     except (KeyError, ValueError) as e:
         return err(e)
 
 
 @app.post("/api/requests/<request_id>/accept")
+@role_required("owner")
+@confirmed_required
 def api_accept(request_id):
-    try:
-        r = engine.accept_booking(request_id)
-        return jsonify(request_to_json(r))
-    except ValueError as e:
-        return err(e, 404)
+    r, error = _owned_request_or_error(request_id)
+    if error:
+        return error
+    return jsonify(request_to_json(engine.accept_booking(r.id)))
 
 
 @app.post("/api/requests/<request_id>/reject")
+@role_required("owner")
+@confirmed_required
 def api_reject(request_id):
+    r, error = _owned_request_or_error(request_id)
+    if error:
+        return error
     d = request.json or {}
-    try:
-        r = engine.reject_booking(request_id, d.get("reason", "The owner withdrew their listing."))
-        return jsonify(request_to_json(r))
-    except ValueError as e:
-        return err(e, 404)
+    return jsonify(request_to_json(
+        engine.reject_booking(r.id, d.get("reason", "The owner withdrew their listing."))))
 
 
 @app.post("/api/requests/<request_id>/payment")
+@role_required("renter")
+@confirmed_required
 def api_payment(request_id):
+    r, error = _renters_request_or_error(request_id)
+    if error:
+        return error
     d = request.json or {}
     try:
-        r = engine.submit_payment(request_id, d.get("provider", "stripe"), d.get("token", "tok_demo"),
+        r = engine.submit_payment(r.id, d.get("provider", "stripe"), d.get("token", "tok_demo"),
                                    float(d["amount"]), float(d["deposit"]))
         return jsonify(request_to_json(r))
     except (KeyError, ValueError) as e:
@@ -328,29 +400,31 @@ def api_payment(request_id):
 
 
 @app.get("/api/requests/<request_id>/instructions")
+@role_required("renter")
 def api_instructions(request_id):
+    r, error = _renters_request_or_error(request_id)
+    if error:
+        return error
     try:
-        text = engine.get_instructions(request_id)
+        text = engine.get_instructions(r.id)
         return jsonify({"instructions": text})
     except ValueError as e:
         return err(e)
 
 
 @app.post("/api/requests/<request_id>/survey")
+@role_required("renter")
 def api_survey(request_id):
+    r, error = _renters_request_or_error(request_id)
+    if error:
+        return error
     d = request.json or {}
     try:
-        survey = engine.post_visit_survey(request_id, int(d["box_experience"]),
+        survey = engine.post_visit_survey(r.id, int(d["box_experience"]),
                                            int(d["booking_experience"]), d.get("comments", ""))
         return jsonify(survey)
     except (KeyError, ValueError) as e:
         return err(e)
-
-
-@app.get("/api/renters/<renter_id>/requests")
-def api_renter_requests(renter_id):
-    reqs = [r for r in engine.requests.values() if r.renter_id == renter_id]
-    return jsonify([request_to_json(r) for r in reqs])
 
 
 if __name__ == "__main__":
