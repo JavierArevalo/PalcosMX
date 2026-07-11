@@ -2,6 +2,9 @@
  * Thin fetch wrapper for the Flask API. Session-cookie auth: the Vite dev
  * proxy (and Flask itself in prod) keeps everything same-origin.
  */
+import { toast } from "sonner";
+import { navigate } from "wouter/use-browser-location";
+
 export class ApiError extends Error {
   status: number;
   needsConfirmation: boolean;
@@ -21,10 +24,20 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
+    const needsConfirmation = Boolean(
+      (data as { needs_confirmation?: boolean }).needs_confirmation,
+    );
+    if (needsConfirmation) {
+      // Central handling: any gated action prompts the user to confirm.
+      toast.error("Confirma tu cuenta para continuar", {
+        description: "Verifica tu correo antes de reservar o publicar.",
+        action: { label: "Confirmar", onClick: () => navigate("/confirmar") },
+      });
+    }
     throw new ApiError(
       (data as { error?: string }).error ?? "Error de conexión con el servidor",
       res.status,
-      Boolean((data as { needs_confirmation?: boolean }).needs_confirmation),
+      needsConfirmation,
     );
   }
   return data as T;
