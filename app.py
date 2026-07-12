@@ -16,7 +16,7 @@ import os
 
 from flask import Flask, request, jsonify, send_from_directory
 from db import db_session, init_db
-from models import Stadium
+from models import Stadium, RentRequest
 from booking_engine import BookingEngine
 import auth
 from auth import current_user, login_required, role_required, confirmed_required
@@ -109,10 +109,34 @@ def seed():
          "2026-10-07", 20000, "Amistoso internacional"),
     ]
 
+    boxes = []
     for owner, stadium, capacity, location, box_desc, date, price, event_desc in box_specs:
         box = engine.create_private_box(owner.id, stadium.id, capacity=capacity,
                                          location_in_stadium=location, description=box_desc)
         engine.add_listing(box.id, date, price, description=event_desc)
+        boxes.append(box)
+
+    # A few completed stays with post-visit surveys so listings show real
+    # ratings on a fresh database (the ratings on cards aggregate these).
+    reviewer = engine.create_renter_account(
+        "Diego Aficionado", "diego@example.com", "pw",
+        "Ciudad de México", {"instagram": "@diegoaficionado"})
+    reviewer.confirm_account()
+    seed_reviews = [
+        # (box index, past date, price paid, box_experience, comment)
+        (0, "2026-04-12", 6200, 5, "Vista espectacular y atención de primera."),
+        (0, "2026-05-03", 6400, 4, "Gran experiencia, el acceso fue muy ágil."),
+        (3, "2026-04-26", 19000, 5, "El palco presidencial vale cada peso."),
+        (5, "2026-05-10", 8500, 4, "Muy cómodo para toda la familia."),
+        (8, "2026-05-17", 5700, 5, "Cerquita de la cancha, ambiente increíble."),
+        (10, "2026-05-24", 13500, 4, "Excelente suite, gran servicio de bar."),
+    ]
+    for idx, date, price, stars, comment in seed_reviews:
+        db_session.add(RentRequest(
+            box_id=boxes[idx].id, listing_id="seed-review", renter_id=reviewer.id,
+            date=date, price=price, status="completed",
+            survey={"box_experience": stars, "booking_experience": 5, "comments": comment},
+        ))
 
     db_session.commit()
 
@@ -142,9 +166,10 @@ def spa(path):
 # Helpers
 # ---------------------------------------------------------------------------
 
-def entry_to_json(entry):
+def entry_to_json(entry, ratings=None):
     box, listing = entry["box"], entry["listing"]
     stadium = engine.get_stadium(box.stadium_id)
+    box_rating = (ratings or {}).get(box.id)
     return {
         "listing_id": listing.listing_id,
         "date": listing.date,
@@ -157,7 +182,16 @@ def entry_to_json(entry):
         "stadium_id": box.stadium_id,
         "stadium_name": stadium.name if stadium else "",
         "stadium_city": stadium.city if stadium else "",
+        "rating": box_rating["rating"] if box_rating else None,
+        "review_count": box_rating["review_count"] if box_rating else 0,
     }
+
+
+def feed_json(entries):
+    """Serialize feed entries with per-box ratings attached (one aggregate
+    query per request, not per entry)."""
+    ratings = engine.box_ratings()
+    return jsonify([entry_to_json(e, ratings) for e in entries])
 
 
 def request_to_json(r):
@@ -322,33 +356,34 @@ def api_save_preferences():
 @app.get("/api/feed/available")
 def api_feed_available():
     stadium_id = request.args.get("stadium_id")
-    return jsonify([entry_to_json(e) for e in engine.available_boxes(stadium_id)])
+    return feed_json(engine.available_boxes(stadium_id))
 
 
 @app.get("/api/feed/suggest")
 @role_required("renter")
 def api_feed_suggest():
-    return jsonify([entry_to_json(e) for e in engine.suggest_stadium(current_user().id)])
+    return feed_json(engine.suggest_stadium(current_user().id))
 
 
 @app.get("/api/feed/by-location")
 @role_required("renter")
 def api_feed_by_location():
-    return jsonify([entry_to_json(e) for e in engine.filter_by_location(current_user().id)])
+    return feed_json(engine.filter_by_location(current_user().id))
 
 
 @app.get("/api/feed/by-stadium/<stadium_id>")
 def api_feed_by_stadium(stadium_id):
     sort_by = request.args.get("sort_by", "price")
-    return jsonify([entry_to_json(e) for e in engine.filter_by_stadium(stadium_id, sort_by)])
+    return feed_json(engine.filter_by_stadium(stadium_id, sort_by))
 
 
 @app.get("/api/feed/best-deals")
 def api_feed_best_deals():
     deals = engine.show_best_deals()
+    ratings = engine.box_ratings()
     out = []
     for d in deals:
-        j = entry_to_json(d)
+        j = entry_to_json(d, ratings)
         j["fair_value"] = d["fair_value"]
         j["discount"] = round(d["discount"], 2)
         out.append(j)
