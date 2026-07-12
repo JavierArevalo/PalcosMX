@@ -95,6 +95,8 @@ export interface FeedEntry {
   stadium_id: string;
   stadium_name: string;
   stadium_city: string;
+  rating: number | null;
+  review_count: number;
   fair_value?: number;
   discount?: number;
 }

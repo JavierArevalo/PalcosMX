@@ -3,7 +3,7 @@
  * the landing grid (chevron action) and /explorar (Solicitar button).
  */
 import { motion } from "framer-motion";
-import { MapPin, Users, Calendar, ChevronRight } from "lucide-react";
+import { MapPin, Users, Calendar, ChevronRight, Star } from "lucide-react";
 import type { FeedEntry } from "@/lib/api";
 import { formatMXN, formatDate } from "@/lib/format";
 import { stadiumImage } from "@/lib/images";
@@ -42,13 +42,20 @@ export default function ListingCard({
         />
         <div className="absolute inset-0 bg-gradient-to-t from-[oklch(0.09_0.005_260/80%)] via-transparent to-transparent" />
 
-        {isDeal && (
-          <div className="absolute top-3 left-3">
+        <div className="absolute top-3 left-3 flex gap-2">
+          {isDeal && (
             <span className="px-2.5 py-1 bg-[oklch(0.72_0.12_75)] text-[oklch(0.09_0.005_260)] text-xs font-semibold rounded-sm" style={outfit}>
               Ahorra {formatMXN(entry.discount!)}
             </span>
-          </div>
-        )}
+          )}
+          {entry.rating != null && (
+            <span className="flex items-center gap-1 px-2.5 py-1 bg-[oklch(0.09_0.005_260/80%)] backdrop-blur-sm rounded-sm border border-white/10" style={outfit}>
+              <Star size={11} className="fill-[oklch(0.72_0.12_75)] text-[oklch(0.72_0.12_75)]" />
+              <span className="text-xs font-semibold text-white">{entry.rating}</span>
+              <span className="text-xs text-[oklch(0.50_0.008_260)]">({entry.review_count})</span>
+            </span>
+          )}
+        </div>
 
         <div className="absolute top-3 right-3 flex items-center gap-1 px-2.5 py-1 bg-[oklch(0.09_0.005_260/80%)] backdrop-blur-sm rounded-sm border border-white/10">
           <Calendar size={11} className="text-[oklch(0.72_0.12_75)]" />
