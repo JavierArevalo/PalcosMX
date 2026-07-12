@@ -397,6 +397,23 @@ class BookingEngine:
             candidates.sort(key=lambda e: e["listing"].price)
         return candidates
 
+    def box_ratings(self) -> dict[str, dict]:
+        """Aggregate post-visit surveys into a per-box average rating.
+        Returns {box_id: {"rating": 4.8, "review_count": 3}} for boxes that
+        have at least one completed survey (box_experience, 1-5)."""
+        rows = db_session.execute(
+            select(RentRequest.box_id, RentRequest.survey)
+            .where(RentRequest.survey.is_not(None)))
+        scores: dict[str, list[float]] = {}
+        for box_id, survey in rows:
+            value = (survey or {}).get("box_experience")
+            if isinstance(value, (int, float)):
+                scores.setdefault(box_id, []).append(float(value))
+        return {
+            box_id: {"rating": round(sum(vals) / len(vals), 1), "review_count": len(vals)}
+            for box_id, vals in scores.items()
+        }
+
     def show_best_deals(self, top_n: int = 10) -> list[dict]:
         """Show best deals(): listings priced below their estimated fair
         value (fair value - listing price = discount)."""
