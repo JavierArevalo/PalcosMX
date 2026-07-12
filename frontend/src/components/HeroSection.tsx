@@ -8,7 +8,7 @@ import { motion } from "framer-motion";
 import { Search, MapPin, Building2, Calendar } from "lucide-react";
 import { useLocation } from "wouter";
 
-const HERO_BG = "/images/hero.jpg";
+const HERO_BG = "/images/hero.webp";
 
 const cities = ["Ciudad de México", "Guadalajara", "Monterrey", "Puebla", "Tijuana", "León"];
 const venueTypes = ["Estadio de Fútbol", "Arena / Auditorio", "Estadio de Béisbol", "Centro de Convenciones", "Hipódromo"];
