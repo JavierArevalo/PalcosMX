@@ -266,3 +266,26 @@
 .map-popup-btn:hover {
   background: oklch(0.82 0.10 80);
 }
+
+/* Leaflet controls — dark-themed to match */
+.leaflet-control-attribution {
+  background: oklch(0.09 0.005 260 / 85%) !important;
+  color: oklch(0.45 0.008 260) !important;
+  font-size: 10px !important;
+  padding: 2px 6px;
+}
+.leaflet-control-attribution a {
+  color: oklch(0.58 0.06 75) !important;
+}
+.leaflet-control-zoom a {
+  background: oklch(0.13 0.007 260) !important;
+  color: oklch(0.92 0.008 80) !important;
+  border-color: oklch(1 0 0 / 12%) !important;
+}
+.leaflet-control-zoom a:hover {
+  background: oklch(0.72 0.12 75) !important;
+  color: oklch(0.09 0.005 260) !important;
+}
+.leaflet-bar {
+  border-color: oklch(1 0 0 / 12%) !important;
+}

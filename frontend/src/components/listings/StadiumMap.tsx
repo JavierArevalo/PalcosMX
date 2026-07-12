@@ -4,7 +4,7 @@
  * list. Free Carto dark tiles (no API key).
  */
 import { useMemo } from "react";
-import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
+import { MapContainer, TileLayer, Marker, Popup, AttributionControl } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import type { FeedEntry, Stadium } from "@/lib/api";
@@ -61,8 +61,11 @@ export default function StadiumMap({
         center={bounds ? undefined : [23.6, -102.5]}
         zoom={bounds ? undefined : 5}
         scrollWheelZoom={false}
+        attributionControl={false}
         style={{ height: "520px", width: "100%", background: "oklch(0.09 0.005 260)" }}
       >
+        {/* Required credit for the free OSM/CARTO tiles, restyled dark. */}
+        <AttributionControl prefix={false} position="bottomright" />
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
           url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
