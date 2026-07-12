@@ -113,30 +113,27 @@ export interface RentRequest {
   survey: Record<string, unknown> | null;
 }
 
-export interface Box {
-  id: string;
-  owner_id: string;
+export interface BoxListing {
+  listing_id: string;
+  box_id: string;
   stadium_id: string;
+  date: string;
+  price: number;
   capacity: number;
   location_in_stadium: string;
   description: string;
-  available_dates: Array<{
-    listing_id: string;
-    date: string;
-    price: number;
-    capacity: number;
-    description: string;
-  }>;
 }
 
 export interface BoxRequest {
   request_id: string;
+  box_id: string;
   renter_id: string;
   renter_name: string;
   date: string;
   message: string;
   status: string;
-  reject_reason?: string;
+  reject_reason?: string | null;
+  requested_at?: string;
   renter_history: Array<{
     request_id: string;
     box_id: string;
@@ -144,4 +141,27 @@ export interface BoxRequest {
     price: number;
     status: string;
   }>;
+}
+
+export interface BookingRecord {
+  box_id: string;
+  stadium_id: string;
+  date: string;
+  price_rented: number;
+  price_owner_received: number;
+  renter_name: string;
+  location_in_stadium: string;
+  event_description: string;
+}
+
+export interface Box {
+  id: string;
+  owner_id: string;
+  stadium_id: string;
+  capacity: number;
+  location_in_stadium: string;
+  description: string;
+  available_dates: BoxListing[];
+  requested_dates: Record<string, BoxRequest[]>;
+  booking_history: BookingRecord[];
 }
