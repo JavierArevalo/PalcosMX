@@ -109,8 +109,9 @@ Delete `palcos.db` to reset to the seed data.
 - `POST /api/stadiums` is unauthenticated (there's no admin role yet).
 - `preferred_teams` is collected and stored but not yet used in
   `suggest_stadium()` scoring.
-- `filter_by_location()` and the fair-value model in `show_best_deals()`
-  are simple placeholders (city string match / linear formula) — swap in
-  real geo-distance and a proper market-comps model when you have data.
+- The fair-value model in `show_best_deals()` is a simple linear formula —
+  swap in a proper market-comps model when you have data.
+  (`filter_by_location()` now uses real haversine distance with a
+  city-coordinates lookup for the renter's side.)
 - SQLite with `create_all` (no migrations) — swap in Postgres + Alembic
   for production.
