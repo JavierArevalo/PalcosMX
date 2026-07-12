@@ -8,7 +8,7 @@ import { TrendingUp, Shield, Clock, ChevronRight } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/contexts/AuthContext";
 
-const OWNER_IMG = "/images/owner.jpg";
+const OWNER_IMG = "/images/owner.webp";
 
 const benefits = [
   {

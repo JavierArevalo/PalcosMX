@@ -66,9 +66,9 @@ def seed():
     if db_session.query(Stadium).count() > 0:
         return
 
-    azteca = engine.create_stadium("Azteca Stadium", "Mexico City")
-    monterrey = engine.create_stadium("Monterrey Stadium", "Monterrey")
-    jalisco = engine.create_stadium("Jalisco Stadium", "Guadalajara")
+    azteca = engine.create_stadium("Estadio Azteca", "Ciudad de México")
+    monterrey = engine.create_stadium("Estadio de Monterrey", "Monterrey")
+    jalisco = engine.create_stadium("Estadio Jalisco", "Guadalajara")
 
     owner_azteca = engine.create_owner_account("Sofía Torres", "sofia@example.com", "pw", "Mexico City")
     owner_monterrey = engine.create_owner_account("Ricardo Elizondo", "ricardo@example.com", "pw", "Monterrey")
@@ -78,35 +78,35 @@ def seed():
 
     # Each tuple: (owner, stadium, capacity, location_in_stadium, description, listing_date, price, event_description)
     box_specs = [
-        # Azteca Stadium — 4 boxes, each a different location
-        (owner_azteca, azteca, 12, "North Wing, Level 3", "Intimate glass-front suite",
-         "2026-09-14", 6500, "Liga MX Clásico"),
-        (owner_azteca, azteca, 20, "South Wing, Level 2", "Open-air terrace box",
-         "2026-09-21", 9800, "Concacaf qualifier"),
-        (owner_azteca, azteca, 35, "East Wing, Level 4", "Full hospitality suite with private bar",
-         "2026-10-05", 15000, "El Tri international friendly"),
-        (owner_azteca, azteca, 50, "West Wing, Level 5 — Presidential", "Top-tier suite, dedicated waitstaff",
-         "2026-10-12", 19500, "World Cup warm-up match"),
+        # Estadio Azteca — 4 palcos, cada uno en una ubicación distinta
+        (owner_azteca, azteca, 12, "Ala Norte, Nivel 3", "Suite íntima con frente de cristal",
+         "2026-09-14", 6500, "Clásico de Liga MX"),
+        (owner_azteca, azteca, 20, "Ala Sur, Nivel 2", "Palco con terraza al aire libre",
+         "2026-09-21", 9800, "Eliminatoria de Concacaf"),
+        (owner_azteca, azteca, 35, "Ala Oriente, Nivel 4", "Suite de hospitalidad con bar privado",
+         "2026-10-05", 15000, "Amistoso internacional del Tri"),
+        (owner_azteca, azteca, 50, "Ala Poniente, Nivel 5 — Presidencial", "Suite de máximo nivel con personal dedicado",
+         "2026-10-12", 19500, "Partido de preparación al Mundial"),
 
-        # Monterrey Stadium — 4 boxes, each a different location
-        (owner_monterrey, monterrey, 10, "North Terrace, Level 1", "Cozy suite, great sightlines",
-         "2026-09-18", 5200, "Rayados league match"),
-        (owner_monterrey, monterrey, 18, "South Terrace, Level 2", "Family-friendly suite with lounge seating",
+        # Estadio de Monterrey — 4 palcos, cada uno en una ubicación distinta
+        (owner_monterrey, monterrey, 10, "Terraza Norte, Nivel 1", "Suite acogedora con gran visibilidad",
+         "2026-09-18", 5200, "Partido de liga de Rayados"),
+        (owner_monterrey, monterrey, 18, "Terraza Sur, Nivel 2", "Suite familiar con sala lounge",
          "2026-09-25", 8700, "Clásico Regiomontano"),
-        (owner_monterrey, monterrey, 28, "East Terrace, Level 3", "Suite with outdoor balcony",
-         "2026-10-02", 12500, "Liguilla playoff match"),
-        (owner_monterrey, monterrey, 45, "West Terrace, Level 4 — Skybox", "Premium skybox, full catering",
-         "2026-10-09", 18000, "Champions Cup match"),
+        (owner_monterrey, monterrey, 28, "Terraza Oriente, Nivel 3", "Suite con balcón exterior",
+         "2026-10-02", 12500, "Partido de Liguilla"),
+        (owner_monterrey, monterrey, 45, "Terraza Poniente, Nivel 4 — Skybox", "Skybox premium con catering completo",
+         "2026-10-09", 18000, "Partido de Copa de Campeones"),
 
-        # Jalisco Stadium — 4 boxes, each a different location
-        (owner_jalisco, jalisco, 14, "North Stand, Level 1", "Classic suite, close to the pitch",
-         "2026-09-16", 5900, "Chivas league match"),
-        (owner_jalisco, jalisco, 22, "South Stand, Level 2", "Suite with dedicated bar service",
+        # Estadio Jalisco — 4 palcos, cada uno en una ubicación distinta
+        (owner_jalisco, jalisco, 14, "Tribuna Norte, Nivel 1", "Suite clásica, cerca de la cancha",
+         "2026-09-16", 5900, "Partido de liga de Chivas"),
+        (owner_jalisco, jalisco, 22, "Tribuna Sur, Nivel 2", "Suite con servicio de bar dedicado",
          "2026-09-23", 9500, "Clásico Tapatío"),
-        (owner_jalisco, jalisco, 32, "East Stand, Level 3", "Wraparound suite with two TVs",
-         "2026-09-30", 13800, "Copa MX quarterfinal"),
-        (owner_jalisco, jalisco, 50, "West Stand, Level 4 — VIP Suite", "Top-of-venue VIP suite, red-carpet entry",
-         "2026-10-07", 20000, "International friendly"),
+        (owner_jalisco, jalisco, 32, "Tribuna Oriente, Nivel 3", "Suite envolvente con dos pantallas",
+         "2026-09-30", 13800, "Cuartos de final de Copa MX"),
+        (owner_jalisco, jalisco, 50, "Tribuna Poniente, Nivel 4 — Suite VIP", "Suite VIP en lo alto del estadio, entrada de gala",
+         "2026-10-07", 20000, "Amistoso internacional"),
     ]
 
     for owner, stadium, capacity, location, box_desc, date, price, event_desc in box_specs:
