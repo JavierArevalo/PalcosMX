@@ -1,23 +1,31 @@
 """
 app.py
-Flask REST API + website for Palcos, wired on top of booking_engine.py.
+Flask REST API for Palcos + server for the built React frontend.
 
 Run:
     uv sync
     uv run python app.py
 Then open http://localhost:5050
+
+Frontend dev mode: `cd frontend && npm run dev` and open http://localhost:3000
+(the Vite dev server proxies /api here). For production, build once with
+`cd frontend && npm run build` — Flask serves frontend/dist below.
 """
 
 import os
 
-from flask import Flask, request, jsonify, render_template
+from flask import Flask, request, jsonify, send_from_directory
 from db import db_session, init_db
 from models import Stadium
 from booking_engine import BookingEngine
 import auth
 from auth import current_user, login_required, role_required, confirmed_required
 
-app = Flask(__name__)
+FRONTEND_DIST = os.path.join(os.path.dirname(os.path.abspath(__file__)), "frontend", "dist")
+
+# static_folder=None: the SPA catch-all below serves frontend/dist itself
+# (Flask's built-in static route would shadow deep links like /explorar).
+app = Flask(__name__, static_folder=None)
 # Signs the session cookie. Fine for local dev; set PALCOS_SECRET_KEY for
 # anything shared.
 app.secret_key = os.environ.get("PALCOS_SECRET_KEY", "dev-only-secret-change-me")
@@ -113,12 +121,21 @@ seed()
 
 
 # ---------------------------------------------------------------------------
-# Website
+# Website — serve the built React SPA (frontend/dist). Explicit /api routes
+# outrank the catch-all in werkzeug, so the API is unaffected.
 # ---------------------------------------------------------------------------
 
-@app.route("/")
-def index():
-    return render_template("index.html")
+@app.route("/", defaults={"path": ""})
+@app.route("/<path:path>")
+def spa(path):
+    if path.startswith("api/"):
+        return jsonify({"error": "Not found"}), 404
+    full = os.path.join(FRONTEND_DIST, path)
+    if path and os.path.isfile(full):
+        return send_from_directory(FRONTEND_DIST, path)
+    if not os.path.isfile(os.path.join(FRONTEND_DIST, "index.html")):
+        return ("Frontend no compilado: ejecuta `cd frontend && npm install && npm run build`", 503)
+    return send_from_directory(FRONTEND_DIST, "index.html")
 
 
 # ---------------------------------------------------------------------------
