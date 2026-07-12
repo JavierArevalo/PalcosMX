@@ -50,7 +50,11 @@ export default function HeroSection() {
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    navigate("/explorar");
+    const params = new URLSearchParams();
+    if (city) params.set("ciudad", city);
+    if (date) params.set("fecha", date);
+    const qs = params.toString();
+    navigate(qs ? `/explorar?${qs}` : "/explorar");
   };
 
   return (

@@ -4,9 +4,9 @@
  */
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useLocation } from "wouter";
+import { useLocation, useSearch } from "wouter";
 import { toast } from "sonner";
-import { List, Map as MapIcon } from "lucide-react";
+import { List, Map as MapIcon, X } from "lucide-react";
 import AppShell from "@/components/layout/AppShell";
 import PageHeading from "@/components/PageHeading";
 import ListingCard from "@/components/listings/ListingCard";
@@ -36,9 +36,14 @@ function feedPath(filters: FilterState): string {
 export default function Explore() {
   const { user } = useAuth();
   const [, navigate] = useLocation();
+  const search = useSearch();
   const [filters, setFilters] = useState<FilterState>({ mode: "available", stadiumId: "", sortBy: "price" });
   const [requestTarget, setRequestTarget] = useState<FeedEntry | null>(null);
   const [view, setView] = useState<"list" | "map">("list");
+  // Hero-search filters arrive via the URL (?ciudad=…&fecha=…) and apply
+  // client-side on top of whatever feed mode is active.
+  const [cityFilter, setCityFilter] = useState(() => new URLSearchParams(search).get("ciudad") ?? "");
+  const [dateFilter, setDateFilter] = useState(() => new URLSearchParams(search).get("fecha") ?? "");
 
   const path = feedPath(filters);
   const { data: entries, isLoading } = useQuery({
@@ -71,6 +76,24 @@ export default function Explore() {
       {icon}
       {label}
     </button>
+  );
+
+  const visibleEntries = (entries ?? []).filter(
+    (e) =>
+      (!cityFilter || e.stadium_city.toLowerCase() === cityFilter.toLowerCase()) &&
+      (!dateFilter || e.date >= dateFilter),
+  );
+
+  const filterChip = (label: string, onClear: () => void) => (
+    <span
+      className="flex items-center gap-1.5 px-3 py-1.5 rounded-sm text-xs bg-[oklch(0.72_0.12_75/12%)] border border-[oklch(0.72_0.12_75/35%)] text-[oklch(0.82_0.10_80)]"
+      style={outfit}
+    >
+      {label}
+      <button onClick={onClear} aria-label={`Quitar filtro ${label}`} className="hover:text-white transition-colors">
+        <X size={12} />
+      </button>
+    </span>
   );
 
   const handleRequest = (entry: FeedEntry) => {
@@ -109,6 +132,13 @@ export default function Explore() {
         </div>
       </div>
 
+      {(cityFilter || dateFilter) && view === "list" && (
+        <div className="flex flex-wrap gap-2 -mt-4 mb-8">
+          {cityFilter && filterChip(`Ciudad: ${cityFilter}`, () => setCityFilter(""))}
+          {dateFilter && filterChip(`Desde: ${dateFilter}`, () => setDateFilter(""))}
+        </div>
+      )}
+
       {view === "map" ? (
         <StadiumMap
           stadiums={stadiums ?? []}
@@ -120,9 +150,9 @@ export default function Explore() {
         />
       ) : isLoading ? (
         <ListingGridSkeleton />
-      ) : entries && entries.length > 0 ? (
+      ) : visibleEntries.length > 0 ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {entries.map((entry, i) => (
+          {visibleEntries.map((entry, i) => (
             <ListingCard
               key={entry.listing_id}
               entry={entry}
