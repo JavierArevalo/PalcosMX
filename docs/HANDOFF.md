@@ -2,7 +2,8 @@
 
 > Audience: a developer (or AI coding assistant) picking this project up cold.
 > Everything you need to run it, understand it, and continue the work is here.
-> Last updated: 2026-07-12, on branch `feature/react-frontend`.
+> Last updated: 2026-07-12 (post PR #6 — redesign, polish, map, and ratings
+> all merged to `main`).
 
 ---
 
@@ -79,14 +80,18 @@ survive killing the parent and keeps `palcos.db` locked — kill all
 
 ## 4. Repo state (as of this handoff)
 
-- `main` on GitHub (`JavierArevalo/PalcosMX`) has: uv migration, SQLite
-  persistence, auth/onboarding (roadmap Screens 1–3) on the OLD vanilla
-  frontend, unit-of-work transactions, in-page dialogs. PRs #1 and #2 are
-  merged.
-- Branch **`feature/react-frontend`** (local on Mauricio's machine at the
-  time of writing; 8 commits) contains the FULL frontend rewrite: the old
-  `templates/` + `static/` vanilla UI is deleted and replaced by the React
-  SPA. It needs to be pushed and PR'd into `main`.
+- `main` on GitHub (`JavierArevalo/PalcosMX`) has everything through PR #6:
+  uv tooling, SQLite persistence, unit-of-work transactions, the full React
+  SPA in Spanish (old `templates/` + `static/` deleted), WebP images,
+  Spanish seed data, the map view with real stadium coordinates + haversine
+  "Cerca de mí", and survey-driven star ratings on listing cards.
+- Open branch **`feature/alembic-migrations`** (pushed, kept separate on
+  purpose): Alembic schema migrations + `PALCOS_DATABASE_URL` env
+  configuration. Once merged, "delete `palcos.db` on schema change" stops
+  being the workflow — see that branch's README/HANDOFF edits.
+- The map's OSM/CARTO attribution is intentionally hidden for the private
+  demo; restore it before any public deploy (note in
+  `frontend/src/components/listings/StadiumMap.tsx`).
 - The design source demos live in Mauricio's
   `Downloads\palcos_manus_version` (foundation: typography, OKLch tokens,
   landing sections) and `Downloads\palcos_base44_version` (stolen touches:
@@ -105,9 +110,13 @@ survive killing the parent and keeps `palcos.db` locked — kill all
 - `lib/api.ts` — fetch wrapper + all API types. 403s with
   `needs_confirmation` trigger a central toast with a "Confirmar" action.
 - `components/listings/` — shared `ListingCard` (used by landing +
-  explore), filters, request dialog. `components/owner/`,
-  `components/renter/` — dashboard pieces. `components/ui/` — 19 shadcn
-  components (don't add more unless used).
+  explore; shows the rating badge), filters, request dialog, and
+  `StadiumMap` (Leaflet + Carto dark tiles; Lista/Mapa toggle lives in
+  `pages/Explore.tsx`). `components/owner/`, `components/renter/` —
+  dashboard pieces. `components/ui/` — 19 shadcn components (don't add
+  more unless used).
+- Hero search (`HeroSection.tsx`) passes `?ciudad=`/`?fecha=` to
+  `/explorar`, which applies them client-side with removable chips.
 - The owner dashboard reads incoming requests from the
   `requested_dates`/`booking_history` embedded in `GET /api/my/boxes` —
   no separate requests endpoint needed.
@@ -121,8 +130,10 @@ by-location|by-stadium/<id>?sort_by=price|capacity`. Owner:
 `DELETE /api/boxes/<id>/listings/<date>`. Lifecycle:
 `POST /api/requests` → `POST /api/requests/<id>/accept|reject|payment` →
 `GET /api/requests/<id>/instructions` → `POST /api/requests/<id>/survey`.
-`GET /api/my/requests`, `PUT /api/my/preferences`. Errors are
-`{"error": "..."}`; confirmation-gated 403s add `"needs_confirmation": true`.
+`GET /api/my/requests`, `PUT /api/my/preferences`. Feed entries include
+`rating` (avg of survey `box_experience`, or null) and `review_count`.
+Errors are `{"error": "..."}`; confirmation-gated 403s add
+`"needs_confirmation": true`.
 
 ## 5. Project conventions (please keep)
 
@@ -154,27 +165,26 @@ banner). Prod-mode: after `npm run build`, hard-refresh deep links on
 
 ## 7. Recommended next steps (in priority order)
 
-1. **Push `feature/react-frontend` and PR it into `main`** — everything
-   else builds on it.
-2. **Compress the images** in `frontend/public/images/` — they came from
-   the demo CDN at 5–7 MB each; the hero alone kills first paint. Target
-   ≤300 KB each (WebP). Biggest single win available.
-3. **Code-split the bundle** — 485 kB minified. Lazy-load the dashboard
-   routes (`React.lazy`) and consider `manualChunks` for framer-motion.
-4. **Translate the seed data** (`seed()` in `app.py`) — stadium/event
-   descriptions are English inside a Spanish UI.
+1. **Merge `feature/alembic-migrations`** — schema migrations +
+   env-configurable database URL; prerequisite for deploying.
+2. **Deploy the demo** — host Flask + built frontend (Railway/Render),
+   point `PALCOS_DATABASE_URL` at managed Postgres (Supabase/Neon), set a
+   real `PALCOS_SECRET_KEY`, restore the map attribution.
+3. **Box photo uploads** — every box currently shares one of three stock
+   photos by stadium (`frontend/src/lib/images.ts`); real per-box photos
+   are the biggest remaining visual gap.
+4. **Escrow release** — `process_payment()` holds funds "in escrow"
+   forever; release the owner's share when the booking completes, and
+   show earnings status in `/mis-palcos`.
 5. **Use `preferred_teams` in suggest scoring** — collected in
    onboarding, ignored by `booking_engine.suggest_stadium()`.
 6. **Secure `POST /api/stadiums`** — currently unauthenticated (needs an
    admin concept, or restrict to owners).
-7. **Map view + real geo distance** — stadiums have lat/lng columns
-   (all 0.0); `filter_by_location()` is a city-string placeholder.
-   Roadmap Screen 4 wants a map tab.
-8. **Alembic migrations** — replace the delete-`palcos.db` workflow
-   before the schema matters (then Postgres for production).
-9. **Real payments** — `process_payment()` is the Stripe integration
-   point; escrow is currently held forever (never released on
-   completion).
+7. **Code-split the bundle** — ~500 kB minified. Lazy-load the dashboard
+   routes (`React.lazy`) and consider `manualChunks` for framer-motion
+   and leaflet.
+8. **Real payments** — `process_payment()` is the Stripe integration
+   point.
 
 ## 8. Known quirks
 
