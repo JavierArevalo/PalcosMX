@@ -6,14 +6,20 @@ the owner accepts or declines, payment (simulated) moves the booking to
 confirmed, and both sides get instructions / a post-visit survey.
 
 Accounts, boxes, listings and bookings persist to a local SQLite database,
-and the site now has real login + onboarding (roadmap Screens 1–3).
+the site has real login + onboarding (roadmap Screens 1–3), and the UI is a
+React + Tailwind single-page app in Spanish ("Cinematic Dark Luxury" design,
+adopted from the Manus demo with Base44 touches).
 
 ## Run it
 
-Python is managed with [uv](https://docs.astral.sh/uv/) — no system Python
-needed (uv downloads the pinned interpreter on first sync):
+The backend's Python is managed with [uv](https://docs.astral.sh/uv/); the
+frontend is a Vite + React app under `frontend/` (needs Node.js + npm).
+
+**Production-style (one server):** build the frontend once, then Flask
+serves both the API and the built SPA:
 
 ```powershell
+cd frontend; npm install; npm run build; cd ..
 uv sync
 uv run python app.py
 ```
@@ -21,9 +27,19 @@ uv run python app.py
 Then open **http://localhost:5050**. Run from the repo root — the SQLite
 file (`palcos.db`) is created relative to the working directory.
 
-The frontend is intentionally **vanilla JS/CSS with no build step** — Flask
-serves `templates/` and `static/` directly, so there's no npm/node toolchain
-to install.
+**Frontend development (two terminals):** hot reload via the Vite dev
+server, which proxies `/api` to Flask:
+
+```powershell
+# terminal 1
+uv run python app.py
+
+# terminal 2
+cd frontend
+npm run dev
+```
+
+Then open **http://localhost:3000**.
 
 ## Demo accounts / seed data
 
@@ -55,31 +71,34 @@ Delete `palcos.db` to reset to the seed data.
   email confirmation (Screen 2), login/logout/me. Identity lives in a
   server-signed session cookie; set `PALCOS_SECRET_KEY` in the environment
   for anything beyond local dev.
-- `app.py` — the Flask REST API over the engine. Owner/renter identity is
-  derived from the session (`/api/my/...` routes); ownership is enforced
-  server-side (you can only manage your own boxes/requests).
-- `templates/index.html`, `static/style.css`, `static/app.js` — the website
-  UI: login/signup → confirm → preferences onboarding, then a Browse tab
-  (renter feed), a List a Box tab (owners), and a My Reservations tab
-  (renters).
+- `app.py` — the Flask REST API over the engine, plus the SPA catch-all
+  that serves `frontend/dist`. Owner/renter identity is derived from the
+  session (`/api/my/...` routes); ownership is enforced server-side (you
+  can only manage your own boxes/requests).
+- `frontend/` — the React + Tailwind SPA (TypeScript, Vite, wouter,
+  TanStack Query, shadcn/Radix components). Routes: `/` landing (live
+  best-deals grid), `/explorar` catalog + request dialog, `/acceso`
+  login/signup, `/confirmar` OTP confirmation, `/preferencias` renter
+  onboarding, `/mis-reservas` renter lifecycle, `/mis-palcos` owner
+  dashboard.
 
 ## How it maps to the roadmap's screens
 
-- Screen 1 (create account) → the signup card (role choice; renters must
-  link at least one social account so owners can vet requests).
-- Screen 2 (confirm account) → the confirmation-code step. The email is
+- Screen 1 (create account) → `/acceso` (role choice; renters must link at
+  least one social account so owners can vet requests).
+- Screen 2 (confirm account) → `/confirmar` (OTP input). The email is
   simulated: the code is shown on screen and printed to the server log.
   Unconfirmed users can browse but can't transact (create boxes/listings,
   request, pay) until confirmed.
-- Screen 3 (preferences) → the renter onboarding step and the Preferences
-  card: price range, capacity bucket, preferred stadiums, preferred teams,
-  location.
-- Screen 4 (main landing page / feed) → the "Browse Suites" tab, with
-  filter-by-stadium, sort by price/capacity, "Suggest for me", "Filter by
-  my location", and "Best deals".
+- Screen 3 (preferences) → `/preferencias` (onboarding) and the
+  Preferencias card in `/mis-reservas`: price range, capacity bucket,
+  preferred stadiums, preferred teams, location.
+- Screen 4 (main landing page / feed) → the `/` landing plus `/explorar`,
+  with filter-by-stadium, sort by price/capacity, "Sugeridos para mí",
+  "Cerca de mí", and "Mejores Ofertas".
 - Screens 5–7 (submit payment, confirmation + instructions, survey) → the
-  request lifecycle buttons under "My Reservations": Pay & confirm → Get
-  instructions → Leave feedback.
+  request lifecycle in `/mis-reservas`: Pagar y confirmar → Ver
+  instrucciones → Dejar comentarios.
 
 ## Notes on what's simplified for the prototype
 
