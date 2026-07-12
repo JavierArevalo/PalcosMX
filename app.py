@@ -66,9 +66,9 @@ def seed():
     if db_session.query(Stadium).count() > 0:
         return
 
-    azteca = engine.create_stadium("Estadio Azteca", "Ciudad de México")
-    monterrey = engine.create_stadium("Estadio de Monterrey", "Monterrey")
-    jalisco = engine.create_stadium("Estadio Jalisco", "Guadalajara")
+    azteca = engine.create_stadium("Estadio Azteca", "Ciudad de México", 19.3029, -99.1505)
+    monterrey = engine.create_stadium("Estadio de Monterrey", "Monterrey", 25.6693, -100.2442)
+    jalisco = engine.create_stadium("Estadio Jalisco", "Guadalajara", 20.7014, -103.3396)
 
     owner_azteca = engine.create_owner_account("Sofía Torres", "sofia@example.com", "pw", "Mexico City")
     owner_monterrey = engine.create_owner_account("Ricardo Elizondo", "ricardo@example.com", "pw", "Monterrey")
