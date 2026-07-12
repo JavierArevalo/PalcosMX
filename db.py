@@ -29,8 +29,22 @@ class Base(DeclarativeBase):
 
 
 def init_db() -> None:
-    """Create all tables (idempotent). Models must be imported first so
-    they are registered on Base.metadata."""
-    import models  # noqa: F401  (registers the mapped classes)
+    """Bring the database schema to the current Alembic head.
 
-    Base.metadata.create_all(engine)
+    - Fresh/empty database: runs all migrations (creates the full schema).
+    - Pre-Alembic database (tables exist but no version marker): stamps it
+      as current, adopting it without touching data.
+    - Up-to-date database: no-op.
+    """
+    import models  # noqa: F401  (registers the mapped classes on Base.metadata)
+
+    from alembic import command
+    from alembic.config import Config
+
+    cfg = Config(os.path.join(os.path.dirname(os.path.abspath(__file__)), "alembic.ini"))
+
+    inspector = inspect(engine)
+    if inspector.has_table("users") and not inspector.has_table("alembic_version"):
+        command.stamp(cfg, "head")
+    else:
+        command.upgrade(cfg, "head")
