@@ -6,13 +6,15 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
+import { List, Map as MapIcon } from "lucide-react";
 import AppShell from "@/components/layout/AppShell";
 import PageHeading from "@/components/PageHeading";
 import ListingCard from "@/components/listings/ListingCard";
 import ListingFilters, { type FilterState } from "@/components/listings/ListingFilters";
 import RequestDialog from "@/components/listings/RequestDialog";
+import StadiumMap from "@/components/listings/StadiumMap";
 import { ListingGridSkeleton } from "@/components/FeaturedVenues";
-import { api, type FeedEntry } from "@/lib/api";
+import { api, type FeedEntry, type Stadium } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
 
 const outfit = { fontFamily: "'Outfit', sans-serif" } as const;
@@ -36,12 +38,40 @@ export default function Explore() {
   const [, navigate] = useLocation();
   const [filters, setFilters] = useState<FilterState>({ mode: "available", stadiumId: "", sortBy: "price" });
   const [requestTarget, setRequestTarget] = useState<FeedEntry | null>(null);
+  const [view, setView] = useState<"list" | "map">("list");
 
   const path = feedPath(filters);
   const { data: entries, isLoading } = useQuery({
     queryKey: ["feed", path],
     queryFn: () => api<FeedEntry[]>(path),
   });
+
+  // The map always shows the full availability picture, independent of filters.
+  const { data: allEntries } = useQuery({
+    queryKey: ["feed", "/api/feed/available"],
+    queryFn: () => api<FeedEntry[]>("/api/feed/available"),
+    enabled: view === "map",
+  });
+  const { data: stadiums } = useQuery({
+    queryKey: ["stadiums"],
+    queryFn: () => api<Stadium[]>("/api/stadiums"),
+    enabled: view === "map",
+  });
+
+  const viewBtn = (v: "list" | "map", icon: React.ReactNode, label: string) => (
+    <button
+      onClick={() => setView(v)}
+      className={`flex items-center gap-1.5 px-3.5 py-2 rounded-sm text-xs font-medium transition-all border ${
+        view === v
+          ? "bg-[oklch(0.72_0.12_75)] text-[oklch(0.09_0.005_260)] border-transparent"
+          : "border-white/10 text-[oklch(0.75_0.008_80)] hover:border-[oklch(0.72_0.12_75/40%)]"
+      }`}
+      style={outfit}
+    >
+      {icon}
+      {label}
+    </button>
+  );
 
   const handleRequest = (entry: FeedEntry) => {
     if (!user) {
@@ -69,9 +99,26 @@ export default function Explore() {
         }
       />
 
-      <ListingFilters filters={filters} onChange={setFilters} />
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="flex-1 min-w-0">
+          <ListingFilters filters={filters} onChange={setFilters} />
+        </div>
+        <div className="flex gap-2 mb-10">
+          {viewBtn("list", <List size={13} />, "Lista")}
+          {viewBtn("map", <MapIcon size={13} />, "Mapa")}
+        </div>
+      </div>
 
-      {isLoading ? (
+      {view === "map" ? (
+        <StadiumMap
+          stadiums={stadiums ?? []}
+          entries={allEntries ?? []}
+          onSelectStadium={(stadiumId) => {
+            setFilters({ ...filters, stadiumId });
+            setView("list");
+          }}
+        />
+      ) : isLoading ? (
         <ListingGridSkeleton />
       ) : entries && entries.length > 0 ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">

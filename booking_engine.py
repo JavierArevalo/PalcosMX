@@ -19,6 +19,7 @@ commits once at the end.
 
 from __future__ import annotations
 import datetime
+import math
 from typing import Optional
 
 from sqlalchemy import select
@@ -28,6 +29,30 @@ from models import (
     new_id, PrivateBox, Stadium, Owner, Renter, Listing, BookingRecord,
     BoxRequest, RentRequest,
 )
+
+
+# Prototype geocoding: coordinates for the cities the app knows about.
+# A real deployment would geocode the renter's address (or use device
+# location) instead of a lookup table.
+CITY_COORDS: dict[str, tuple[float, float]] = {
+    "ciudad de méxico": (19.4326, -99.1332),
+    "cdmx": (19.4326, -99.1332),
+    "mexico city": (19.4326, -99.1332),
+    "guadalajara": (20.6597, -103.3496),
+    "monterrey": (25.6866, -100.3161),
+    "puebla": (19.0414, -98.2063),
+    "tijuana": (32.5149, -117.0382),
+    "león": (21.1250, -101.6860),
+    "leon": (21.1250, -101.6860),
+}
+
+
+def haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """Great-circle distance in kilometers."""
+    rlat1, rlon1, rlat2, rlon2 = map(math.radians, (lat1, lon1, lat2, lon2))
+    a = (math.sin((rlat2 - rlat1) / 2) ** 2
+         + math.cos(rlat1) * math.cos(rlat2) * math.sin((rlon2 - rlon1) / 2) ** 2)
+    return 6371.0 * 2 * math.asin(math.sqrt(a))
 
 
 class BookingEngine:
@@ -341,18 +366,23 @@ class BookingEngine:
         return [entry for _, entry in scored]
 
     def filter_by_location(self, renter_id: str) -> list[dict]:
-        """Filter by location(): boxes sorted by proximity to the renter,
-        then by price (lowest first) within the same stadium."""
+        """Filter by location(): boxes sorted by real geo distance (haversine)
+        from the renter's city to the stadium, then by price within the same
+        distance. Falls back to a city-name match when the renter's city
+        isn't in the lookup table or the stadium has no coordinates."""
         renter = self._get_renter(renter_id)
         candidates = self.available_boxes()
+        renter_coords = CITY_COORDS.get((renter.location or "").strip().lower())
 
-        def distance(entry):
+        def distance(entry) -> float:
             stadium = self.get_stadium(entry["box"].stadium_id)
             if not stadium or not renter.location:
-                return 0
-            # Placeholder distance metric; swap for real geo distance
-            # (haversine) once lat/lng are wired up on the User model.
-            return 0 if stadium.city.lower() == renter.location.lower() else 1
+                return 0.0
+            if renter_coords and (stadium.latitude or stadium.longitude):
+                return haversine_km(renter_coords[0], renter_coords[1],
+                                    stadium.latitude, stadium.longitude)
+            # Fallback: same city first, everything else after.
+            return 0.0 if stadium.city.lower() == renter.location.lower() else 1e6
 
         candidates.sort(key=lambda e: (distance(e), e["listing"].price))
         return candidates
