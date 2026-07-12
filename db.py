@@ -1,21 +1,25 @@
 """
 db.py
-SQLite + SQLAlchemy plumbing for Palcos.
+SQLAlchemy plumbing for Palcos.
 
-The prototype persists to a single `palcos.db` file in the repo root
-(created on first run). There are no migrations — if the schema changes,
-delete `palcos.db` and it will be recreated and reseeded on next start.
+Defaults to a local SQLite file (`palcos.db` in the working directory);
+point PALCOS_DATABASE_URL at Postgres (or any SQLAlchemy URL) in production.
+Schema is managed by Alembic migrations (see migrations/); init_db() brings
+any database — fresh, pre-Alembic, or outdated — to the current head.
 """
 
-from sqlalchemy import create_engine
+import os
+
+from sqlalchemy import create_engine, inspect
 from sqlalchemy.orm import DeclarativeBase, scoped_session, sessionmaker
+
+DATABASE_URL = os.environ.get("PALCOS_DATABASE_URL", "sqlite:///palcos.db")
 
 # check_same_thread=False: Flask's dev server handles requests on
 # multiple threads; scoped_session gives each thread its own Session.
-engine = create_engine(
-    "sqlite:///palcos.db",
-    connect_args={"check_same_thread": False},
-)
+_connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
+
+engine = create_engine(DATABASE_URL, connect_args=_connect_args)
 
 db_session = scoped_session(sessionmaker(bind=engine))
 
