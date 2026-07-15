@@ -8,6 +8,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Menu, X, ChevronDown, LogOut, Settings } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { toast } from "sonner";
+import { HashLink } from "@/components/HashLink";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   DropdownMenu,
@@ -87,14 +88,14 @@ export default function Navbar({ solid = false }: { solid?: boolean }) {
             {/* Desktop Links */}
             <div className="hidden lg:flex items-center gap-8">
               {publicLinks.map((link) => (
-                <Link
+                <HashLink
                   key={link.label}
                   href={link.href}
-                  className="text-sm font-medium text-[oklch(0.75_0.008_80)] hover:text-[oklch(0.82_0.10_80)] transition-colors duration-200 tracking-wide"
+                  className="text-sm font-medium text-[oklch(0.75_0.008_80)] hover:text-[oklch(0.82_0.10_80)] transition-colors duration-200 tracking-wide cursor-pointer"
                   style={outfit}
                 >
                   {link.label}
-                </Link>
+                </HashLink>
               ))}
               {reservationLink && (
                 <Link
@@ -203,15 +204,15 @@ export default function Navbar({ solid = false }: { solid?: boolean }) {
           >
             <div className="px-4 py-6 flex flex-col gap-4">
               {publicLinks.map((link) => (
-                <Link
+                <HashLink
                   key={link.label}
                   href={link.href}
                   onClick={() => setMobileOpen(false)}
-                  className="text-base font-medium text-[oklch(0.80_0.008_80)] hover:text-[oklch(0.82_0.10_80)] transition-colors py-2 border-b border-white/5"
+                  className="text-base font-medium text-[oklch(0.80_0.008_80)] hover:text-[oklch(0.82_0.10_80)] transition-colors py-2 border-b border-white/5 cursor-pointer"
                   style={outfit}
                 >
                   {link.label}
-                </Link>
+                </HashLink>
               ))}
               {reservationLink && (
                 <Link

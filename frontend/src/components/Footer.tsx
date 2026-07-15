@@ -3,15 +3,58 @@
  * Contact info, links, early access signup form, social links
  */
 import { useState } from "react";
+import type { ReactNode } from "react";
 import { motion } from "framer-motion";
 import { Mail, Phone, MapPin, Instagram, Twitter, Linkedin, Send, ArrowRight } from "lucide-react";
 import { toast } from "sonner";
+import { HashLink } from "@/components/HashLink";
+
+const outfitFont = { fontFamily: "'Outfit', sans-serif" } as const;
+
+/**
+ * A footer link. Landing-section anchors ("/#how-it-works") route through
+ * HashLink so they scroll correctly even from a non-landing page; "#"
+ * placeholders show a "coming soon" toast; anything else (e.g. "#footer",
+ * which exists on every page) is a plain in-page anchor.
+ */
+function FooterLink({
+  href,
+  className,
+  children,
+}: {
+  href: string;
+  className: string;
+  children: ReactNode;
+}) {
+  if (href.startsWith("/#")) {
+    return (
+      <HashLink href={href} className={`${className} cursor-pointer`} style={outfitFont}>
+        {children}
+      </HashLink>
+    );
+  }
+  return (
+    <a
+      href={href}
+      onClick={(e) => {
+        if (href === "#") {
+          e.preventDefault();
+          toast.info("Próximamente disponible.");
+        }
+      }}
+      className={className}
+      style={outfitFont}
+    >
+      {children}
+    </a>
+  );
+}
 
 const footerLinks = {
   platform: [
-    { label: "Explorar Palcos", href: "#venues" },
-    { label: "Cómo Funciona", href: "#how-it-works" },
-    { label: "Publicar mi Palco", href: "#owners" },
+    { label: "Explorar Palcos", href: "/#venues" },
+    { label: "Cómo Funciona", href: "/#how-it-works" },
+    { label: "Publicar mi Palco", href: "/#owners" },
     { label: "Precios y Comisiones", href: "#" },
     { label: "Preguntas Frecuentes", href: "#" },
   ],
@@ -50,13 +93,6 @@ export default function Footer() {
       description: "Serás de los primeros en acceder a Palcos cuando lancemos.",
     });
     setEmail("");
-  };
-
-  const handleLinkClick = (e: React.MouseEvent<HTMLAnchorElement>, href: string) => {
-    if (href === "#") {
-      e.preventDefault();
-      toast.info("Próximamente disponible.");
-    }
   };
 
   return (
@@ -188,15 +224,13 @@ export default function Footer() {
               <ul className="space-y-3">
                 {footerLinks.platform.map((link) => (
                   <li key={link.label}>
-                    <a
+                    <FooterLink
                       href={link.href}
-                      onClick={(e) => handleLinkClick(e, link.href)}
                       className="text-sm text-[oklch(0.50_0.008_260)] hover:text-[oklch(0.82_0.10_80)] transition-colors flex items-center gap-1 group"
-                      style={{ fontFamily: "'Outfit', sans-serif" }}
                     >
                       <ArrowRight size={10} className="opacity-0 group-hover:opacity-100 transition-opacity -ml-1 text-[oklch(0.72_0.12_75)]" />
                       {link.label}
-                    </a>
+                    </FooterLink>
                   </li>
                 ))}
               </ul>
@@ -209,15 +243,13 @@ export default function Footer() {
               <ul className="space-y-3">
                 {footerLinks.company.map((link) => (
                   <li key={link.label}>
-                    <a
+                    <FooterLink
                       href={link.href}
-                      onClick={(e) => handleLinkClick(e, link.href)}
                       className="text-sm text-[oklch(0.50_0.008_260)] hover:text-[oklch(0.82_0.10_80)] transition-colors flex items-center gap-1 group"
-                      style={{ fontFamily: "'Outfit', sans-serif" }}
                     >
                       <ArrowRight size={10} className="opacity-0 group-hover:opacity-100 transition-opacity -ml-1 text-[oklch(0.72_0.12_75)]" />
                       {link.label}
-                    </a>
+                    </FooterLink>
                   </li>
                 ))}
               </ul>
@@ -254,15 +286,13 @@ export default function Footer() {
           </p>
           <div className="flex gap-6">
             {footerLinks.legal.map((link) => (
-              <a
+              <FooterLink
                 key={link.label}
                 href={link.href}
-                onClick={(e) => handleLinkClick(e, link.href)}
                 className="text-xs text-[oklch(0.35_0.006_260)] hover:text-[oklch(0.58_0.010_260)] transition-colors"
-                style={{ fontFamily: "'Outfit', sans-serif" }}
               >
                 {link.label}
-              </a>
+              </FooterLink>
             ))}
           </div>
         </div>
