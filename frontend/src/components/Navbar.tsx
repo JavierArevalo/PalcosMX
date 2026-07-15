@@ -21,7 +21,6 @@ import {
 const publicLinks = [
   { label: "Explorar", href: "/explorar" },
   { label: "Cómo Funciona", href: "/#how-it-works" },
-  { label: "Para Propietarios", href: "/#owners" },
 ];
 
 const outfit = { fontFamily: "'Outfit', sans-serif" } as const;
@@ -38,11 +37,13 @@ export default function Navbar({ solid = false }: { solid?: boolean }) {
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
-  const roleLink = user
-    ? user.role === "renter"
-      ? { label: "Mis Reservas", href: "/mis-reservas" }
-      : { label: "Mis Palcos", href: "/mis-palcos" }
-    : null;
+  // Renters get a link to their bookings; owners get a link to their dashboard.
+  const reservationLink = user?.role === "renter" ? { label: "Mis Reservas", href: "/mis-reservas" } : null;
+  const isOwner = user?.role === "owner";
+
+  // Not an owner yet: send them to signup with the owner role preselected.
+  // Already an owner: straight to their dashboard.
+  const handleOwnerEntry = () => navigate(isOwner ? "/mis-palcos" : "/acceso?role=owner");
 
   const handleLogout = async () => {
     try {
@@ -95,14 +96,31 @@ export default function Navbar({ solid = false }: { solid?: boolean }) {
                   {link.label}
                 </Link>
               ))}
-              {roleLink && (
+              {reservationLink && (
                 <Link
-                  href={roleLink.href}
+                  href={reservationLink.href}
                   className="text-sm font-medium text-[oklch(0.82_0.10_80)] hover:text-white transition-colors duration-200 tracking-wide"
                   style={outfit}
                 >
-                  {roleLink.label}
+                  {reservationLink.label}
                 </Link>
+              )}
+              {isOwner ? (
+                <Link
+                  href="/mis-palcos"
+                  className="text-sm font-medium text-[oklch(0.82_0.10_80)] hover:text-white transition-colors duration-200 tracking-wide"
+                  style={outfit}
+                >
+                  Mis Palcos
+                </Link>
+              ) : (
+                <button
+                  onClick={handleOwnerEntry}
+                  className="text-sm font-medium text-[oklch(0.82_0.10_80)] hover:text-white transition-colors duration-200 tracking-wide"
+                  style={outfit}
+                >
+                  Para Propietarios
+                </button>
               )}
             </div>
 
@@ -195,15 +213,36 @@ export default function Navbar({ solid = false }: { solid?: boolean }) {
                   {link.label}
                 </Link>
               ))}
-              {roleLink && (
+              {reservationLink && (
                 <Link
-                  href={roleLink.href}
+                  href={reservationLink.href}
                   onClick={() => setMobileOpen(false)}
                   className="text-base font-medium text-[oklch(0.82_0.10_80)] py-2 border-b border-white/5"
                   style={outfit}
                 >
-                  {roleLink.label}
+                  {reservationLink.label}
                 </Link>
+              )}
+              {isOwner ? (
+                <Link
+                  href="/mis-palcos"
+                  onClick={() => setMobileOpen(false)}
+                  className="text-base font-medium text-[oklch(0.82_0.10_80)] py-2 border-b border-white/5"
+                  style={outfit}
+                >
+                  Mis Palcos
+                </Link>
+              ) : (
+                <button
+                  onClick={() => {
+                    setMobileOpen(false);
+                    handleOwnerEntry();
+                  }}
+                  className="text-left text-base font-medium text-[oklch(0.82_0.10_80)] py-2 border-b border-white/5"
+                  style={outfit}
+                >
+                  Para Propietarios
+                </button>
               )}
               {!user ? (
                 <>

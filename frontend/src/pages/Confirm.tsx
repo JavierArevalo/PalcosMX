@@ -21,7 +21,7 @@ export default function Confirm() {
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
 
-  const afterConfirmTarget = user?.role === "renter" ? "/preferencias" : "/mis-palcos";
+  const afterConfirmTarget = user?.role === "renter" ? "/preferencias" : "/bienvenida";
 
   if (user?.confirmed) {
     navigate(afterConfirmTarget);

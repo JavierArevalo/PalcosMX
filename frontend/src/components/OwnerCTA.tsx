@@ -32,8 +32,8 @@ export default function OwnerCTA() {
   const { user } = useAuth();
   const [, navigate] = useLocation();
 
-  // Owners land on their dashboard; everyone else starts at signup.
-  const handlePublish = () => navigate(user?.role === "owner" ? "/mis-palcos" : "/acceso");
+  // Owners land on their dashboard; everyone else starts at signup (owner role preselected).
+  const handlePublish = () => navigate(user?.role === "owner" ? "/mis-palcos" : "/acceso?role=owner");
 
   return (
     <section id="owners" className="relative py-24 lg:py-32 overflow-hidden bg-[oklch(0.09_0.005_260)]">
