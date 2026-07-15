@@ -5,7 +5,7 @@
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { useLocation } from "wouter";
+import { useLocation, useSearch } from "wouter";
 import { toast } from "sonner";
 import { Building2, KeyRound } from "lucide-react";
 import AppShell from "@/components/layout/AppShell";
@@ -111,12 +111,12 @@ function LoginForm() {
 // Signup
 // ---------------------------------------------------------------------------
 
-function SignupForm() {
+function SignupForm({ defaultRole = "renter" }: { defaultRole?: "renter" | "owner" }) {
   const { signup } = useAuth();
   const [, navigate] = useLocation();
   const form = useForm<SignupValues>({
     resolver: zodResolver(signupSchema),
-    defaultValues: { role: "renter", social_platform: "instagram" },
+    defaultValues: { role: defaultRole, social_platform: "instagram" },
   });
   const role = form.watch("role");
 
@@ -217,6 +217,9 @@ function SignupForm() {
 // ---------------------------------------------------------------------------
 
 export default function Auth() {
+  const search = useSearch();
+  const preselectOwner = new URLSearchParams(search).get("role") === "owner";
+
   return (
     <AppShell>
       <div className="max-w-lg mx-auto">
@@ -234,7 +237,7 @@ export default function Auth() {
         </div>
 
         <div className="bg-[oklch(0.13_0.007_260)] border border-white/6 rounded-lg p-6 sm:p-8">
-          <Tabs defaultValue="login">
+          <Tabs defaultValue={preselectOwner ? "signup" : "login"}>
             <TabsList className="w-full mb-6">
               <TabsTrigger value="login" className="flex-1" style={outfit}>
                 Iniciar Sesión
@@ -247,7 +250,7 @@ export default function Auth() {
               <LoginForm />
             </TabsContent>
             <TabsContent value="signup">
-              <SignupForm />
+              <SignupForm defaultRole={preselectOwner ? "owner" : "renter"} />
             </TabsContent>
           </Tabs>
         </div>
