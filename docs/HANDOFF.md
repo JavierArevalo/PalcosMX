@@ -24,7 +24,7 @@ gets access instructions → post-visit survey.
 | Layer | Tech | Where |
 |---|---|---|
 | Backend API | Flask + SQLAlchemy, session-cookie auth | `app.py`, `auth.py`, `booking_engine.py`, `models.py`, `db.py` |
-| Database | SQLite (`palcos.db`, auto-created + demo-seeded; **no migrations** — delete the file to reset) | repo root |
+| Database | SQLite by default (`palcos.db`, auto-created + demo-seeded); `PALCOS_DATABASE_URL` env var switches to Postgres. Schema managed by **Alembic** (`migrations/`) — the app auto-upgrades to head on startup. Schema change workflow: edit `models.py` → `uv run alembic revision --autogenerate -m "..."` → restart. Deleting `palcos.db` still works as a demo-data reset. | repo root |
 | Frontend | React 19 + TypeScript + Tailwind 4 + Vite SPA, Spanish UI, "Cinematic Dark Luxury" theme (gold on near-black, Cormorant Garamond + Outfit) | `frontend/` |
 | Python deps | [uv](https://docs.astral.sh/uv/) (`uv sync`) | `pyproject.toml` |
 | JS deps | npm | `frontend/package.json` |
@@ -85,10 +85,10 @@ survive killing the parent and keeps `palcos.db` locked — kill all
   SPA in Spanish (old `templates/` + `static/` deleted), WebP images,
   Spanish seed data, the map view with real stadium coordinates + haversine
   "Cerca de mí", and survey-driven star ratings on listing cards.
-- Open branch **`feature/alembic-migrations`** (pushed, kept separate on
-  purpose): Alembic schema migrations + `PALCOS_DATABASE_URL` env
-  configuration. Once merged, "delete `palcos.db` on schema change" stops
-  being the workflow — see that branch's README/HANDOFF edits.
+- Alembic schema migrations + `PALCOS_DATABASE_URL` env configuration are
+  merged: "delete `palcos.db` on schema change" is no longer the workflow
+  (deleting it still works as a demo-data reset — see the Database row
+  above).
 - The map's OSM/CARTO attribution is intentionally hidden for the private
   demo; restore it before any public deploy (note in
   `frontend/src/components/listings/StadiumMap.tsx`).
@@ -165,25 +165,23 @@ banner). Prod-mode: after `npm run build`, hard-refresh deep links on
 
 ## 7. Recommended next steps (in priority order)
 
-1. **Merge `feature/alembic-migrations`** — schema migrations +
-   env-configurable database URL; prerequisite for deploying.
-2. **Deploy the demo** — host Flask + built frontend (Railway/Render),
+1. **Deploy the demo** — host Flask + built frontend (Railway/Render),
    point `PALCOS_DATABASE_URL` at managed Postgres (Supabase/Neon), set a
    real `PALCOS_SECRET_KEY`, restore the map attribution.
-3. **Box photo uploads** — every box currently shares one of three stock
+2. **Box photo uploads** — every box currently shares one of three stock
    photos by stadium (`frontend/src/lib/images.ts`); real per-box photos
    are the biggest remaining visual gap.
-4. **Escrow release** — `process_payment()` holds funds "in escrow"
+3. **Escrow release** — `process_payment()` holds funds "in escrow"
    forever; release the owner's share when the booking completes, and
    show earnings status in `/mis-palcos`.
-5. **Use `preferred_teams` in suggest scoring** — collected in
+4. **Use `preferred_teams` in suggest scoring** — collected in
    onboarding, ignored by `booking_engine.suggest_stadium()`.
-6. **Secure `POST /api/stadiums`** — currently unauthenticated (needs an
+5. **Secure `POST /api/stadiums`** — currently unauthenticated (needs an
    admin concept, or restrict to owners).
-7. **Code-split the bundle** — ~500 kB minified. Lazy-load the dashboard
+6. **Code-split the bundle** — ~500 kB minified. Lazy-load the dashboard
    routes (`React.lazy`) and consider `manualChunks` for framer-motion
    and leaflet.
-8. **Real payments** — `process_payment()` is the Stripe integration
+7. **Real payments** — `process_payment()` is the Stripe integration
    point.
 
 ## 8. Known quirks

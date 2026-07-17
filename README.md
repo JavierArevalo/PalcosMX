@@ -57,8 +57,12 @@ Delete `palcos.db` to reset to the seed data.
   definitions" (`PrivateBox` with `add_listing()` / `remove_listing()`,
   `Stadium`, `User` → `Owner` / `Renter`), now persisted as SQLAlchemy
   models. Passwords are hashed with werkzeug.
-- `db.py` — SQLite/SQLAlchemy plumbing (`palcos.db`; no migrations — delete
-  the file if the schema changes).
+- `db.py` — SQLAlchemy plumbing. Defaults to SQLite (`palcos.db`); set
+  `PALCOS_DATABASE_URL` for Postgres in production. Schema is managed by
+  Alembic (`migrations/`): on startup the app upgrades the database to the
+  latest migration automatically. To change the schema: edit `models.py`,
+  then `uv run alembic revision --autogenerate -m "describe change"` and
+  restart (or `uv run alembic upgrade head`).
 - `booking_engine.py` — every method from "Booking Engine functionalities":
   renter actions (`create_rent_request`, `submit_payment`,
   `get_instructions`, `post_visit_survey`), system actions
@@ -113,5 +117,5 @@ Delete `palcos.db` to reset to the seed data.
   swap in a proper market-comps model when you have data.
   (`filter_by_location()` now uses real haversine distance with a
   city-coordinates lookup for the renter's side.)
-- SQLite with `create_all` (no migrations) — swap in Postgres + Alembic
-  for production.
+- SQLite by default — for production, point `PALCOS_DATABASE_URL` at
+  Postgres; the same Alembic migrations apply there.
