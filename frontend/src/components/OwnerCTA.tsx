@@ -5,7 +5,8 @@
  */
 import { motion } from "framer-motion";
 import { TrendingUp, Shield, Clock, ChevronRight } from "lucide-react";
-import { Link, useLocation } from "wouter";
+import { useLocation } from "wouter";
+import { HashLink } from "@/components/HashLink";
 import { useAuth } from "@/contexts/AuthContext";
 
 const OWNER_IMG = "/images/owner.webp";
@@ -173,13 +174,13 @@ export default function OwnerCTA() {
                 Publicar Mi Palco
                 <ChevronRight size={16} className="group-hover:translate-x-1 transition-transform" />
               </button>
-              <Link
+              <HashLink
                 href="/#how-it-works"
-                className="px-8 py-4 rounded-sm text-sm font-medium border border-white/15 text-[oklch(0.75_0.008_80)] hover:border-[oklch(0.72_0.12_75/40%)] hover:text-white transition-all duration-300 text-center"
+                className="px-8 py-4 rounded-sm text-sm font-medium border border-white/15 text-[oklch(0.75_0.008_80)] hover:border-[oklch(0.72_0.12_75/40%)] hover:text-white transition-all duration-300 text-center cursor-pointer"
                 style={{ fontFamily: "'Outfit', sans-serif" }}
               >
                 Saber Más
-              </Link>
+              </HashLink>
             </div>
           </motion.div>
         </div>
