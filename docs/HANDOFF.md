@@ -2,8 +2,8 @@
 
 > Audience: a developer (or AI coding assistant) picking this project up cold.
 > Everything you need to run it, understand it, and continue the work is here.
-> Last updated: 2026-07-12 (post PR #6 — redesign, polish, map, and ratings
-> all merged to `main`).
+> Last updated: 2026-07-17 (post PR #10 — owner onboarding, the anchor-nav
+> fix, and Alembic migrations all merged to `main`).
 
 ---
 
@@ -80,11 +80,13 @@ survive killing the parent and keeps `palcos.db` locked — kill all
 
 ## 4. Repo state (as of this handoff)
 
-- `main` on GitHub (`JavierArevalo/PalcosMX`) has everything through PR #6:
+- `main` on GitHub (`JavierArevalo/PalcosMX`) has everything through PR #10:
   uv tooling, SQLite persistence, unit-of-work transactions, the full React
   SPA in Spanish (old `templates/` + `static/` deleted), WebP images,
   Spanish seed data, the map view with real stadium coordinates + haversine
-  "Cerca de mí", and survey-driven star ratings on listing cards.
+  "Cerca de mí", survey-driven star ratings on listing cards, the owner
+  onboarding wizard at `/bienvenida` (PR #8), and working in-page anchor
+  navigation for the landing sections (PR #9).
 - Alembic schema migrations + `PALCOS_DATABASE_URL` env configuration are
   merged: "delete `palcos.db` on schema change" is no longer the workflow
   (deleting it still works as a demo-data reset — see the Database row
@@ -102,8 +104,14 @@ survive killing the parent and keeps `palcos.db` locked — kill all
 
 - `App.tsx` — wouter routes: `/` landing · `/explorar` catalog ·
   `/acceso` login/signup · `/confirmar` OTP · `/preferencias` renter
-  onboarding · `/mis-reservas` renter dashboard · `/mis-palcos` owner
-  dashboard. Role guards via `components/auth/RequireAuth.tsx`.
+  onboarding · `/mis-reservas` renter dashboard · `/bienvenida` owner
+  onboarding wizard (registrar palco → disponibilidad → choice hub;
+  `components/owner/Onboarding*Step.tsx`) · `/mis-palcos` owner
+  dashboard. Role guards via `components/auth/RequireAuth.tsx`. After OTP
+  confirmation, owners land on `/bienvenida`, renters on `/preferencias`.
+- `components/HashLink.tsx` — `HashLink` + root-mounted `ScrollToHash`
+  make `/#section` links scroll correctly from any page (plain wouter
+  links can't); used by the navbar, footer, and owner CTA.
 - `contexts/AuthContext.tsx` — mirrors `GET /api/auth/me` via TanStack
   Query; exposes login/signup/confirm/resend/logout; holds the demo
   confirmation code.
@@ -153,8 +161,9 @@ Errors are `{"error": "..."}`; confirmation-gated 403s add
 ## 6. How to verify changes (manual E2E script)
 
 With a fresh DB: (1) guest sees real listings on `/` and `/explorar`;
-(2) owner signup → OTP confirm → register box → publish a future date →
-appears in `/explorar` → delete works; (3) renter signup (social handle
+(2) owner signup → OTP confirm → `/bienvenida` wizard (registrar palco →
+publicar disponibilidad → choice hub) → listing appears in `/explorar` →
+delete works from `/mis-palcos`; (3) renter signup (social handle
 required) → confirm → preferences → request a suite with a note;
 (4) owner sees it under Solicitudes with the renter's name/history →
 Aceptar; (5) renter pays (Pagada) → Ver instrucciones (Completada) →
@@ -178,7 +187,7 @@ banner). Prod-mode: after `npm run build`, hard-refresh deep links on
    onboarding, ignored by `booking_engine.suggest_stadium()`.
 5. **Secure `POST /api/stadiums`** — currently unauthenticated (needs an
    admin concept, or restrict to owners).
-6. **Code-split the bundle** — ~500 kB minified. Lazy-load the dashboard
+6. **Code-split the bundle** — ~910 kB minified. Lazy-load the dashboard
    routes (`React.lazy`) and consider `manualChunks` for framer-motion
    and leaflet.
 7. **Real payments** — `process_payment()` is the Stripe integration
