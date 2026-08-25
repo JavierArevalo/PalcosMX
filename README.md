@@ -15,6 +15,11 @@ adopted from the Manus demo with Base44 touches).
 The backend's Python is managed with [uv](https://docs.astral.sh/uv/); the
 frontend is a Vite + React app under `frontend/` (needs Node.js + npm).
 
+**Environment:** copy `.env.example` to `.env` and fill in `PALCOS_DATABASE_URL`
+(a Postgres URL, e.g. from Neon — omit it to fall back to local SQLite) and
+`PALCOS_SECRET_KEY`. `.env` is gitignored and loaded automatically (`db.py`
+calls `load_dotenv()`).
+
 **Production-style (one server):** build the frontend once, then Flask
 serves both the API and the built SPA:
 
@@ -49,7 +54,13 @@ accounts you can log in with:
 
 - `sofia@example.com`, `ricardo@example.com`, `mariana@example.com` — password `pw`
 
-Delete `palcos.db` to reset to the seed data.
+Every row `seed()` creates (stadiums, seed owners, boxes) is tagged
+`is_seed_data=True`, so demo data stays distinguishable from real owners /
+boxes once onboarding brings in the real thing — filter on that column
+rather than assuming everything in the table is real.
+
+Delete `palcos.db` to reset to the seed data (SQLite only — on Postgres,
+just delete the seeded rows).
 
 ## What's in here
 

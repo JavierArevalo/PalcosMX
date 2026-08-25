@@ -98,6 +98,7 @@ def _me_json(user: User) -> dict:
         "email": user.email,
         "location": user.location,
         "social_media": user.social_media,
+        "payment_method": user.payment_method,
         "confirmed": user.confirmed,
     }
     if user.role == "renter":
@@ -172,6 +173,18 @@ def resend_code():
     code = _new_confirmation_code(user)
     return jsonify({"demo_confirmation_code": code})
 
+@bp.post("/payment-method")
+@login_required
+def connect_payment_method():
+    """Owner onboarding step 1: connect a payment method. Simulated —
+    no real Stripe call, same spirit as the simulated email confirmation
+    elsewhere in this prototype."""
+    d = request.json or {}
+    provider = d.get("provider", "stripe")
+    token = d.get("token") or f"tok_demo_{secrets.token_hex(4)}"
+    user = current_user()
+    user.connect_payment_method(provider, token)
+    return jsonify(_me_json(user))
 
 # ---------------------------------------------------------------------------
 # Routes — login / logout / me

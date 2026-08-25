@@ -10,8 +10,11 @@ any database — fresh, pre-Alembic, or outdated — to the current head.
 
 import os
 
+from dotenv import load_dotenv
 from sqlalchemy import create_engine, inspect
 from sqlalchemy.orm import DeclarativeBase, scoped_session, sessionmaker
+
+load_dotenv()  # loads .env in the repo root, if present (local dev convenience)
 
 DATABASE_URL = os.environ.get("PALCOS_DATABASE_URL", "sqlite:///palcos.db")
 

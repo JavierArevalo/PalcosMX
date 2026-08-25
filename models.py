@@ -150,6 +150,7 @@ class PrivateBox(Base):
     capacity: Mapped[int] = mapped_column(Integer)
     location_in_stadium: Mapped[str] = mapped_column(String, default="")  # e.g. "North East, 5th floor"
     description: Mapped[str] = mapped_column(String, default="")
+    is_seed_data: Mapped[bool] = mapped_column(Boolean, default=False)  # True for demo boxes from seed()
 
     # array of available dates to be rented
     available_dates: Mapped[list[Listing]] = relationship(
@@ -270,6 +271,7 @@ class Stadium(Base):
     city: Mapped[str] = mapped_column(String)
     latitude: Mapped[float] = mapped_column(Float, default=0.0)
     longitude: Mapped[float] = mapped_column(Float, default=0.0)
+    is_seed_data: Mapped[bool] = mapped_column(Boolean, default=False)  # True for demo stadiums from seed()
 
     boxes: Mapped[list[PrivateBox]] = relationship()
 
@@ -331,6 +333,7 @@ class User(Base):
     confirmation_code: Mapped[Optional[str]] = mapped_column(String(6), nullable=True)  # simulated-email code
     preferences: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)  # renters only
     created_at: Mapped[str] = mapped_column(String, default=utcnow_iso)
+    is_seed_data: Mapped[bool] = mapped_column(Boolean, default=False)  # True for demo accounts from seed()
 
     __mapper_args__ = {"polymorphic_on": role, "polymorphic_identity": "user"}
 
@@ -438,3 +441,12 @@ class RentRequest(Base):
     instructions: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     survey: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     created_at: Mapped[str] = mapped_column(String, default=utcnow_iso)
+
+    # Response-deadline tracking for the runner (see runner.py): the owner
+    # must act by respond_by (3 days after created_at, or 7 days before the
+    # event date if that's sooner). owner_notified_at / reminder_sent_at
+    # track which emails the runner has already sent, so re-running it is
+    # idempotent instead of re-sending.
+    respond_by: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    owner_notified_at: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    reminder_sent_at: Mapped[Optional[str]] = mapped_column(String, nullable=True)

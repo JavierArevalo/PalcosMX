@@ -1,0 +1,69 @@
+"""
+notifications.py
+Outbound email notifications for the rent-request lifecycle — sent by
+runner.py, not inline in the request handlers (see app.py / runner.py).
+
+Uses Resend (https://resend.com). If RESEND_API_KEY isn't set, sends are
+simulated (printed) instead of attempted — same spirit as the signup OTP
+in auth.py, so local dev works without a real account.
+"""
+import os
+
+import resend
+
+resend.api_key = os.environ.get("RESEND_API_KEY", "")
+FROM_EMAIL = os.environ.get("RESEND_FROM_EMAIL", "Palcos <onboarding@resend.dev>")
+
+
+def _send(to: str, subject: str, html: str) -> None:
+    """Best-effort: never raises — a delivery failure shouldn't block the
+    underlying booking action."""
+    if not resend.api_key:
+        print(f"[palcos] Simulated email to {to}: {subject}")
+        return
+    try:
+        resend.Emails.send({"from": FROM_EMAIL, "to": to, "subject": subject, "html": html})
+    except Exception as e:
+        print(f"[palcos] Failed to send email to {to}: {e}")
+
+
+def send_new_request_email(owner, box, rent_request) -> None:
+    """A renter just requested one of the owner's dates."""
+    note = f"<p>Mensaje del arrendatario: &ldquo;{rent_request.message}&rdquo;</p>" if rent_request.message else ""
+    _send(
+        owner.email,
+        f"Nueva solicitud para tu palco — {rent_request.date}",
+        f"<p>Hola {owner.name},</p>"
+        f"<p>Tienes una nueva solicitud de renta para tu palco "
+        f"({box.location_in_stadium or box.id}) el <strong>{rent_request.date}</strong>, "
+        f"por ${rent_request.price:,.0f} MXN.</p>"
+        f"{note}"
+        f"<p>Revisa la solicitud en tu panel de Palcos, sección Solicitudes.</p>",
+    )
+
+
+def send_response_reminder_email(owner, box, rent_request) -> None:
+    """The owner's response window has passed and the request is still
+    pending — one last nudge before it gets auto-rejected."""
+    _send(
+        owner.email,
+        f"Acción requerida: solicitud pendiente — {rent_request.date}",
+        f"<p>Hola {owner.name},</p>"
+        f"<p>Sigue pendiente tu respuesta a la solicitud de renta de tu palco "
+        f"({box.location_in_stadium or box.id}) para el <strong>{rent_request.date}</strong>.</p>"
+        f"<p>Tienes <strong>12 horas</strong> para aceptar o rechazarla en tu panel de Palcos "
+        f"antes de que se rechace automáticamente y el arrendatario pueda buscar otras opciones.</p>",
+    )
+
+
+def send_auto_rejected_email(renter, box, rent_request) -> None:
+    """The owner didn't respond in time and the request was auto-rejected —
+    let the renter know so they can look at other boxes."""
+    _send(
+        renter.email,
+        f"Tu solicitud no fue respondida a tiempo — {rent_request.date}",
+        f"<p>Hola {renter.name},</p>"
+        f"<p>El propietario no respondió a tiempo tu solicitud de renta para el "
+        f"<strong>{rent_request.date}</strong>, así que la cancelamos automáticamente.</p>"
+        f"<p>Puedes explorar otros palcos disponibles para esa fecha en Palcos.</p>",
+    )

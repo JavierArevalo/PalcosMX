@@ -24,7 +24,9 @@ gets access instructions → post-visit survey.
 | Layer | Tech | Where |
 |---|---|---|
 | Backend API | Flask + SQLAlchemy, session-cookie auth | `app.py`, `auth.py`, `booking_engine.py`, `models.py`, `db.py` |
-| Database | SQLite by default (`palcos.db`, auto-created + demo-seeded); `PALCOS_DATABASE_URL` env var switches to Postgres. Schema managed by **Alembic** (`migrations/`) — the app auto-upgrades to head on startup. Schema change workflow: edit `models.py` → `uv run alembic revision --autogenerate -m "..."` → restart. Deleting `palcos.db` still works as a demo-data reset. | repo root |
+| Database | Postgres (Neon) via `PALCOS_DATABASE_URL` in local `.env` (gitignored; `db.py` loads it via `python-dotenv`); falls back to SQLite (`palcos.db`) if unset. Schema managed by **Alembic** (`migrations/`) — the app auto-upgrades to head on startup. Schema change workflow: edit `models.py` → `uv run alembic revision --autogenerate -m "..."` → restart. `Stadium`/`PrivateBox`/`User` all carry `is_seed_data` (set by `seed()`) so demo rows stay distinguishable from real onboarded data in the same tables. | repo root |
+| Notifications | `notifications.py` sends the "new request" / "response reminder" / "auto-rejected" emails via Resend (`RESEND_API_KEY`/`RESEND_FROM_EMAIL` in `.env`). No key configured → simulated (printed), same pattern as the signup OTP. Best-effort: never raises. | `notifications.py` |
+| Request lifecycle runner | `runner.py` — a standalone job, decoupled from the web process on purpose (not started by `app.py`). One pass per invocation: notify owners of new pending requests, remind them once `respond_by` passes (3 days after sent, or 7 days before the event if sooner), auto-reject + tell the renter if still no decision 12h after the reminder. Deploy as a cron / scheduled job (e.g. Railway cron) hitting `uv run python runner.py` on an interval — nothing runs it automatically yet. | `runner.py`, `RentRequest.respond_by`/`owner_notified_at`/`reminder_sent_at` in `models.py` |
 | Frontend | React 19 + TypeScript + Tailwind 4 + Vite SPA, Spanish UI, "Cinematic Dark Luxury" theme (gold on near-black, Cormorant Garamond + Outfit) | `frontend/` |
 | Python deps | [uv](https://docs.astral.sh/uv/) (`uv sync`) | `pyproject.toml` |
 | JS deps | npm | `frontend/package.json` |
@@ -174,9 +176,10 @@ banner). Prod-mode: after `npm run build`, hard-refresh deep links on
 
 ## 7. Recommended next steps (in priority order)
 
-1. **Deploy the demo** — host Flask + built frontend (Railway/Render),
-   point `PALCOS_DATABASE_URL` at managed Postgres (Supabase/Neon), set a
-   real `PALCOS_SECRET_KEY`, restore the map attribution.
+1. **Deploy the demo** — `PALCOS_DATABASE_URL` now points at a managed
+   Neon Postgres instance (via local `.env`, gitignored) and
+   `PALCOS_SECRET_KEY` is set; still needed: actually host Flask + built
+   frontend (Railway/Render) and restore the map attribution.
 2. **Box photo uploads** — every box currently shares one of three stock
    photos by stadium (`frontend/src/lib/images.ts`); real per-box photos
    are the biggest remaining visual gap.

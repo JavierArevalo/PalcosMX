@@ -1,0 +1,35 @@
+# Render Blueprint — deploys the web service + the runner.py cron job
+# from the same Dockerfile. Secrets (sync: false) are entered once in the
+# Render dashboard on first deploy, never committed here.
+services:
+  - type: web
+    name: palcos
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    plan: free
+    healthCheckPath: /api/stadiums
+    envVars:
+      - key: PALCOS_DATABASE_URL
+        sync: false
+      - key: PALCOS_SECRET_KEY
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: RESEND_FROM_EMAIL
+        sync: false
+
+  - type: cron
+    name: palcos-runner
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    dockerCommand: "uv run python runner.py"
+    schedule: "*/5 * * * *"
+    envVars:
+      - key: PALCOS_DATABASE_URL
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: RESEND_FROM_EMAIL
+        sync: false

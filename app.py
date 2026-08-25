@@ -76,6 +76,13 @@ def seed():
     for o in (owner_azteca, owner_monterrey, owner_jalisco):
         o.confirm_account()
 
+    # Tag every seed-created stadium/owner as demo data so it's easy to
+    # tell apart from (and later wipe independently of) real onboarded data.
+    for s in (azteca, monterrey, jalisco):
+        s.is_seed_data = True
+    for o in (owner_azteca, owner_monterrey, owner_jalisco):
+        o.is_seed_data = True
+
     # Each tuple: (owner, stadium, capacity, location_in_stadium, description, listing_date, price, event_description)
     box_specs = [
         # Estadio Azteca — 4 palcos, cada uno en una ubicación distinta
@@ -113,6 +120,7 @@ def seed():
     for owner, stadium, capacity, location, box_desc, date, price, event_desc in box_specs:
         box = engine.create_private_box(owner.id, stadium.id, capacity=capacity,
                                          location_in_stadium=location, description=box_desc)
+        box.is_seed_data = True
         engine.add_listing(box.id, date, price, description=event_desc)
         boxes.append(box)
 
@@ -122,6 +130,7 @@ def seed():
         "Diego Aficionado", "diego@example.com", "pw",
         "Ciudad de México", {"instagram": "@diegoaficionado"})
     reviewer.confirm_account()
+    reviewer.is_seed_data = True
     seed_reviews = [
         # (box index, past date, price paid, box_experience, comment)
         (0, "2026-04-12", 6200, 5, "Vista espectacular y atención de primera."),

@@ -47,6 +47,20 @@ CITY_COORDS: dict[str, tuple[float, float]] = {
 }
 
 
+RESPONSE_WINDOW = datetime.timedelta(days=3)
+EVENT_DECISION_WINDOW = datetime.timedelta(days=7)
+
+
+def compute_respond_by(date_str: str) -> str:
+    """The owner must act by whichever comes first: 3 days after the
+    request was sent, or 7 days before the event date."""
+    event_date = datetime.date.fromisoformat(date_str)
+    event_cutoff = datetime.datetime.combine(
+        event_date - EVENT_DECISION_WINDOW, datetime.time.min, tzinfo=datetime.timezone.utc)
+    request_cutoff = datetime.datetime.now(datetime.timezone.utc) + RESPONSE_WINDOW
+    return min(request_cutoff, event_cutoff).isoformat()
+
+
 def haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     """Great-circle distance in kilometers."""
     rlat1, rlon1, rlat2, rlon2 = map(math.radians, (lat1, lon1, lat2, lon2))
@@ -142,6 +156,7 @@ class BookingEngine:
             date=date,
             price=listing.price,
             message=message,
+            respond_by=compute_respond_by(date),
             renter_snapshot={
                 "email": renter.email,
                 "renting_history_count": len(renter.booking_history_ids),
