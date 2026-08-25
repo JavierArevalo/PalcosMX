@@ -107,13 +107,22 @@ export default function Navbar({ solid = false }: { solid?: boolean }) {
                 </Link>
               )}
               {isOwner ? (
-                <Link
-                  href="/mis-palcos"
-                  className="text-sm font-medium text-[oklch(0.82_0.10_80)] hover:text-white transition-colors duration-200 tracking-wide"
-                  style={outfit}
-                >
-                  Mis Palcos
-                </Link>
+                <>
+                  <Link
+                    href="/mis-palcos"
+                    className="text-sm font-medium text-[oklch(0.82_0.10_80)] hover:text-white transition-colors duration-200 tracking-wide"
+                    style={outfit}
+                  >
+                    Mis Palcos
+                  </Link>
+                  <Link
+                    href="/solicitudes"
+                    className="text-sm font-medium text-[oklch(0.82_0.10_80)] hover:text-white transition-colors duration-200 tracking-wide"
+                    style={outfit}
+                  >
+                    Solicitudes
+                  </Link>
+                </>
               ) : (
                 <button
                   onClick={handleOwnerEntry}
@@ -225,14 +234,24 @@ export default function Navbar({ solid = false }: { solid?: boolean }) {
                 </Link>
               )}
               {isOwner ? (
-                <Link
-                  href="/mis-palcos"
-                  onClick={() => setMobileOpen(false)}
-                  className="text-base font-medium text-[oklch(0.82_0.10_80)] py-2 border-b border-white/5"
-                  style={outfit}
-                >
-                  Mis Palcos
-                </Link>
+                <>
+                  <Link
+                    href="/mis-palcos"
+                    onClick={() => setMobileOpen(false)}
+                    className="text-base font-medium text-[oklch(0.82_0.10_80)] py-2 border-b border-white/5"
+                    style={outfit}
+                  >
+                    Mis Palcos
+                  </Link>
+                  <Link
+                    href="/solicitudes"
+                    onClick={() => setMobileOpen(false)}
+                    className="text-base font-medium text-[oklch(0.82_0.10_80)] py-2 border-b border-white/5"
+                    style={outfit}
+                  >
+                    Solicitudes
+                  </Link>
+                </>
               ) : (
                 <button
                   onClick={() => {

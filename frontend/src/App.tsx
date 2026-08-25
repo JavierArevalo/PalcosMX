@@ -12,6 +12,7 @@ import Confirm from "./pages/Confirm";
 import Preferences from "./pages/Preferences";
 import RenterDashboard from "./pages/RenterDashboard";
 import OwnerDashboard from "./pages/OwnerDashboard";
+import Solicitudes from "./pages/Solicitudes";
 import NotFound from "./pages/NotFound";
 import OwnerOnboarding from "./pages/OwnerOnboarding";
 
@@ -44,6 +45,11 @@ function Router() {
       <Route path="/mis-palcos">
         <RequireAuth role="owner">
           <OwnerDashboard />
+        </RequireAuth>
+      </Route>
+      <Route path="/solicitudes">
+        <RequireAuth role="owner">
+          <Solicitudes />
         </RequireAuth>
       </Route>
       <Route component={NotFound} />

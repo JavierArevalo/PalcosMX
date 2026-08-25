@@ -86,6 +86,7 @@ def confirmed_required(fn):
 
 
 def _login(user: User) -> None:
+    session.permanent = True  # cookie lives for app.permanent_session_lifetime (see app.py)
     session["user_id"] = user.id
     session["role"] = user.role
 

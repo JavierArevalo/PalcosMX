@@ -33,3 +33,5 @@ services:
         sync: false
       - key: RESEND_FROM_EMAIL
         sync: false
+      - key: APP_BASE_URL
+        value: https://palcos.onrender.com

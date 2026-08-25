@@ -73,7 +73,7 @@ function Field({ label, error, children }: { label: string; error?: string; chil
 // Login
 // ---------------------------------------------------------------------------
 
-function LoginForm() {
+function LoginForm({ next }: { next?: string | null }) {
   const { login } = useAuth();
   const [, navigate] = useLocation();
   const form = useForm<LoginValues>({ resolver: zodResolver(loginSchema) });
@@ -82,7 +82,7 @@ function LoginForm() {
     try {
       const me = await login(values.email, values.password);
       toast.success(`¡Bienvenido de vuelta, ${me.name.split(" ")[0]}!`);
-      navigate(me.role === "owner" ? "/mis-palcos" : "/explorar");
+      navigate(next || (me.role === "owner" ? "/mis-palcos" : "/explorar"));
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "No se pudo iniciar sesión");
     }
@@ -99,10 +99,6 @@ function LoginForm() {
       <Button type="submit" disabled={form.formState.isSubmitting} className="btn-gold w-full py-5 rounded-sm text-sm">
         {form.formState.isSubmitting ? "Iniciando..." : "Iniciar Sesión"}
       </Button>
-      <p className="text-xs text-[oklch(0.50_0.008_260)]" style={outfit}>
-        Cuentas demo de propietario: sofia@example.com / ricardo@example.com / mariana@example.com — contraseña{" "}
-        <code className="text-[oklch(0.72_0.12_75)]">pw</code>
-      </p>
     </form>
   );
 }
@@ -218,7 +214,9 @@ function SignupForm({ defaultRole = "renter" }: { defaultRole?: "renter" | "owne
 
 export default function Auth() {
   const search = useSearch();
-  const preselectOwner = new URLSearchParams(search).get("role") === "owner";
+  const searchParams = new URLSearchParams(search);
+  const preselectOwner = searchParams.get("role") === "owner";
+  const next = searchParams.get("next");
 
   return (
     <AppShell>
@@ -247,7 +245,7 @@ export default function Auth() {
               </TabsTrigger>
             </TabsList>
             <TabsContent value="login">
-              <LoginForm />
+              <LoginForm next={next} />
             </TabsContent>
             <TabsContent value="signup">
               <SignupForm defaultRole={preselectOwner ? "owner" : "renter"} />

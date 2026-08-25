@@ -13,6 +13,7 @@ import resend
 
 resend.api_key = os.environ.get("RESEND_API_KEY", "")
 FROM_EMAIL = os.environ.get("RESEND_FROM_EMAIL", "Palcos <onboarding@resend.dev>")
+APP_BASE_URL = os.environ.get("APP_BASE_URL", "http://localhost:5050").rstrip("/")
 
 
 def _send(to: str, subject: str, html: str) -> None:
@@ -30,6 +31,7 @@ def _send(to: str, subject: str, html: str) -> None:
 def send_new_request_email(owner, box, rent_request) -> None:
     """A renter just requested one of the owner's dates."""
     note = f"<p>Mensaje del arrendatario: &ldquo;{rent_request.message}&rdquo;</p>" if rent_request.message else ""
+    solicitudes_url = f"{APP_BASE_URL}/solicitudes"
     _send(
         owner.email,
         f"Nueva solicitud para tu palco — {rent_request.date}",
@@ -38,20 +40,23 @@ def send_new_request_email(owner, box, rent_request) -> None:
         f"({box.location_in_stadium or box.id}) el <strong>{rent_request.date}</strong>, "
         f"por ${rent_request.price:,.0f} MXN.</p>"
         f"{note}"
-        f"<p>Revisa la solicitud en tu panel de Palcos, sección Solicitudes.</p>",
+        f'<p><a href="{solicitudes_url}">Ver la solicitud y responder</a> '
+        f"(requiere iniciar sesión con tu cuenta de propietario).</p>",
     )
 
 
 def send_response_reminder_email(owner, box, rent_request) -> None:
     """The owner's response window has passed and the request is still
     pending — one last nudge before it gets auto-rejected."""
+    solicitudes_url = f"{APP_BASE_URL}/solicitudes"
     _send(
         owner.email,
         f"Acción requerida: solicitud pendiente — {rent_request.date}",
         f"<p>Hola {owner.name},</p>"
         f"<p>Sigue pendiente tu respuesta a la solicitud de renta de tu palco "
         f"({box.location_in_stadium or box.id}) para el <strong>{rent_request.date}</strong>.</p>"
-        f"<p>Tienes <strong>12 horas</strong> para aceptar o rechazarla en tu panel de Palcos "
+        f"<p>Tienes <strong>12 horas</strong> para "
+        f'<a href="{solicitudes_url}">aceptarla o rechazarla</a> '
         f"antes de que se rechace automáticamente y el arrendatario pueda buscar otras opciones.</p>",
     )
 
@@ -59,11 +64,12 @@ def send_response_reminder_email(owner, box, rent_request) -> None:
 def send_auto_rejected_email(renter, box, rent_request) -> None:
     """The owner didn't respond in time and the request was auto-rejected —
     let the renter know so they can look at other boxes."""
+    explore_url = f"{APP_BASE_URL}/explorar"
     _send(
         renter.email,
         f"Tu solicitud no fue respondida a tiempo — {rent_request.date}",
         f"<p>Hola {renter.name},</p>"
         f"<p>El propietario no respondió a tiempo tu solicitud de renta para el "
         f"<strong>{rent_request.date}</strong>, así que la cancelamos automáticamente.</p>"
-        f"<p>Puedes explorar otros palcos disponibles para esa fecha en Palcos.</p>",
+        f'<p><a href="{explore_url}">Explora otros palcos disponibles</a> para esa fecha.</p>',
     )

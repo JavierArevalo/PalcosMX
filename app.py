@@ -13,6 +13,7 @@ Frontend dev mode: `cd frontend && npm run dev` and open http://localhost:3000
 """
 
 import os
+from datetime import timedelta
 
 from flask import Flask, request, jsonify, send_from_directory
 from db import db_session, init_db
@@ -29,6 +30,8 @@ app = Flask(__name__, static_folder=None)
 # Signs the session cookie. Fine for local dev; set PALCOS_SECRET_KEY for
 # anything shared.
 app.secret_key = os.environ.get("PALCOS_SECRET_KEY", "dev-only-secret-change-me")
+# Logged-in users stay logged in for 7 days (see auth._login: session.permanent = True).
+app.permanent_session_lifetime = timedelta(days=7)
 engine = BookingEngine()
 
 auth.init_auth(engine)

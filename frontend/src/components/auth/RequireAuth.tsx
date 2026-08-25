@@ -14,13 +14,15 @@ export default function RequireAuth({
   children: ReactNode;
 }) {
   const { user, isLoading } = useAuth();
-  const [, navigate] = useLocation();
+  const [location, navigate] = useLocation();
 
   useEffect(() => {
     if (isLoading) return;
-    if (!user) navigate("/acceso");
+    // Preserve the intended destination (e.g. an email link to /solicitudes)
+    // through the login redirect.
+    if (!user) navigate(`/acceso?next=${encodeURIComponent(location)}`);
     else if (role && user.role !== role) navigate("/");
-  }, [user, isLoading, role, navigate]);
+  }, [user, isLoading, role, navigate, location]);
 
   if (isLoading || !user || (role && user.role !== role)) {
     return (
