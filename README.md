@@ -5,10 +5,85 @@ roadmap: owners list a suite for a specific game date, renters request it,
 the owner accepts or declines, payment (simulated) moves the booking to
 confirmed, and both sides get instructions / a post-visit survey.
 
-Accounts, boxes, listings and bookings persist to a local SQLite database,
-the site has real login + onboarding (roadmap Screens 1–3), and the UI is a
-React + Tailwind single-page app in Spanish ("Cinematic Dark Luxury" design,
-adopted from the Manus demo with Base44 touches).
+Accounts, boxes, listings and bookings persist to Postgres (Neon), the site
+has real login + onboarding (roadmap Screens 1–3) plus a live rent-request
+notification pipeline (Resend), and the UI is a React + Tailwind single-page
+app in Spanish ("Cinematic Dark Luxury" design, adopted from the Manus demo
+with Base44 touches). **Live at [palcos.onrender.com](https://palcos.onrender.com).**
+
+## Next steps
+
+- [ ] Test and send real notification emails to actual renters/owners (not
+  just the demo accounts) to confirm deliverability at small scale.
+
+## Owner demo accounts
+
+Three seeded owner accounts exist for testing (one per stadium). Passwords
+aren't listed here since this repo is public — ask Javier for the shared
+demo password.
+
+| Owner | Stadium | Email |
+|---|---|---|
+| Sofía Torres | Estadio Azteca | `javiarevalo9@gmail.com` |
+| Ricardo Elizondo | Estadio de Monterrey | `javiarevalo9+ricardo@gmail.com` |
+| Mariana Ochoa | Estadio Jalisco | `javiarevalo9+mariana@gmail.com` |
+
+These all land in the same inbox via Gmail's `+tag` addressing — useful for
+testing since a real notification email actually arrives when a request
+comes in against any of their boxes. Note: a **fresh** database seeded from
+scratch (see `seed()` in `app.py`) creates these three accounts with their
+original placeholder emails (`sofia@example.com`, etc.) instead — the real
+addresses above were assigned manually on the shared Neon database used by
+both local dev and the live deployment.
+
+## What changed most recently
+
+- **Connected to a real database** — Neon Postgres, via `PALCOS_DATABASE_URL`
+  (falls back to local SQLite if unset). Schema managed by Alembic
+  migrations, auto-upgraded on startup.
+- **`is_seed_data` flag** on `Stadium`/`PrivateBox`/`User` so demo data stays
+  distinguishable from real onboarded data in the same tables, rather than
+  needing separate tables.
+- **Rent-request notification pipeline** (`notifications.py` + `runner.py`):
+  a new request emails the owner immediately; if unanswered by the response
+  deadline (3 days after the request, or 7 days before the event date,
+  whichever is sooner) the owner gets a reminder; still no response 12 hours
+  after that and the request auto-rejects, with the renter notified so they
+  can look elsewhere. `runner.py` is a standalone job, deliberately decoupled
+  from the web process — see "Tech stack" below for how it's scheduled.
+- **Real transactional email via Resend**, sending from a verified custom
+  domain (`palcosmx.com`, SPF/DKIM/DMARC all configured) — can email any
+  real recipient, not just a sandboxed test address.
+- **Deployed to production on Render** — a web service (Docker + gunicorn)
+  and a cron job (`runner.py` on a 5-minute schedule), both defined in
+  `render.yaml` as a Blueprint.
+- **Owner onboarding rebuilt**: register a box → publish availability → a
+  choice screen (add another box / connect payment / go to dashboard).
+  Reachable directly from the landing page / navbar ("Para Propietarios"),
+  not just as a post-signup redirect.
+- **`/solicitudes`** — a dedicated page for owners to review and
+  accept/decline incoming requests, split out from a tab inside
+  `/mis-palcos` specifically so notification emails can link straight to it.
+- **Emails now contain real links** to the relevant page instead of just
+  telling the recipient to go check the app.
+- **Login redirect preservation** (`?next=...`) — clicking an email link
+  while logged out redirects to login, then lands back on the original
+  destination afterward instead of a generic page.
+- **7-day persistent login sessions** — previously the session cookie
+  expired as soon as the browser closed.
+
+## Tech stack
+
+| Layer | Tech |
+|---|---|
+| Backend | Flask + SQLAlchemy, served by Gunicorn in production |
+| Database | Postgres via [Neon](https://neon.tech) (pooled connection in production), schema migrations via Alembic |
+| Email | [Resend](https://resend.com) API, verified custom domain (`palcosmx.com`) for real deliverability |
+| Background jobs | Standalone `runner.py`, scheduled as a Render Cron Job (not an in-process scheduler) |
+| Hosting | [Render](https://render.com) — a Docker-based web service + cron job, both built from one multi-stage `Dockerfile` |
+| Frontend | React 19 + TypeScript, Vite, Tailwind CSS v4, [wouter](https://github.com/molefrog/wouter) (routing), TanStack Query, react-hook-form + zod, shadcn/Radix UI, Framer Motion, Sonner (toasts) |
+| Auth | Server-signed Flask session cookies (7-day persistence), no third-party auth provider |
+| Local env | `python-dotenv` loads `.env` (gitignored) automatically |
 
 ## Run it
 
@@ -16,9 +91,10 @@ The backend's Python is managed with [uv](https://docs.astral.sh/uv/); the
 frontend is a Vite + React app under `frontend/` (needs Node.js + npm).
 
 **Environment:** copy `.env.example` to `.env` and fill in `PALCOS_DATABASE_URL`
-(a Postgres URL, e.g. from Neon — omit it to fall back to local SQLite) and
-`PALCOS_SECRET_KEY`. `.env` is gitignored and loaded automatically (`db.py`
-calls `load_dotenv()`).
+(a Postgres URL, e.g. from Neon — omit it to fall back to local SQLite),
+`PALCOS_SECRET_KEY`, and optionally `RESEND_API_KEY`/`RESEND_FROM_EMAIL`/
+`APP_BASE_URL` if you want real notification emails locally (without a key,
+they're printed to the console instead of sent).
 
 **Production-style (one server):** build the frontend once, then Flask
 serves both the API and the built SPA:
@@ -30,7 +106,8 @@ uv run python app.py
 ```
 
 Then open **http://localhost:5050**. Run from the repo root — the SQLite
-file (`palcos.db`) is created relative to the working directory.
+file (`palcos.db`) is created relative to the working directory (only used
+if `PALCOS_DATABASE_URL` is unset).
 
 **Frontend development (two terminals):** hot reload via the Vite dev
 server, which proxies `/api` to Flask:
@@ -46,21 +123,26 @@ npm run dev
 
 Then open **http://localhost:3000**.
 
-## Demo accounts / seed data
+**Notification runner:** `runner.py` is not started automatically by
+`app.py` — it's a separate process, meant to run on a schedule (in
+production, Render's Cron Job; locally, just invoke it manually whenever you
+want to test the notification pipeline):
 
-On first run (empty database) the app seeds 3 stadiums (Azteca, Monterrey,
-Jalisco), 12 boxes with one listing each, and 3 pre-confirmed owner
-accounts you can log in with:
+```powershell
+uv run python runner.py
+```
 
-- `sofia@example.com`, `ricardo@example.com`, `mariana@example.com` — password `pw`
+## Demo / seed data
 
-Every row `seed()` creates (stadiums, seed owners, boxes) is tagged
+On first run against an empty database, `seed()` in `app.py` creates 3
+stadiums (Azteca, Monterrey, Jalisco), 12 boxes with one listing each, and
+the 3 owner accounts described above. Every row it creates is tagged
 `is_seed_data=True`, so demo data stays distinguishable from real owners /
 boxes once onboarding brings in the real thing — filter on that column
-rather than assuming everything in the table is real.
+rather than assuming everything in a table is real.
 
 Delete `palcos.db` to reset to the seed data (SQLite only — on Postgres,
-just delete the seeded rows).
+delete the seeded rows directly).
 
 ## What's in here
 
@@ -84,18 +166,26 @@ just delete the seeded rows).
   `filter_by_location`, `filter_by_stadium`, `show_best_deals`).
 - `auth.py` — session-based auth + onboarding: signup (Screen 1), simulated
   email confirmation (Screen 2), login/logout/me. Identity lives in a
-  server-signed session cookie; set `PALCOS_SECRET_KEY` in the environment
-  for anything beyond local dev.
+  server-signed session cookie (7-day persistence); set `PALCOS_SECRET_KEY`
+  in the environment for anything beyond local dev.
+- `notifications.py` — outbound emails for the rent-request lifecycle via
+  Resend; simulated (printed) without an API key.
+- `runner.py` — standalone job that drives the notification/deadline
+  pipeline; decoupled from the web process on purpose (see "Tech stack").
 - `app.py` — the Flask REST API over the engine, plus the SPA catch-all
   that serves `frontend/dist`. Owner/renter identity is derived from the
   session (`/api/my/...` routes); ownership is enforced server-side (you
   can only manage your own boxes/requests).
+- `Dockerfile` / `render.yaml` — production deployment: a multi-stage Docker
+  build (Node builds the SPA, Python serves everything) shared by both the
+  web service and the cron job.
 - `frontend/` — the React + Tailwind SPA (TypeScript, Vite, wouter,
   TanStack Query, shadcn/Radix components). Routes: `/` landing (live
   best-deals grid), `/explorar` catalog + request dialog, `/acceso`
   login/signup, `/confirmar` OTP confirmation, `/preferencias` renter
-  onboarding, `/mis-reservas` renter lifecycle, `/mis-palcos` owner
-  dashboard.
+  onboarding, `/mis-reservas` renter lifecycle, `/bienvenida` owner
+  onboarding, `/mis-palcos` owner dashboard (boxes + earnings),
+  `/solicitudes` owner's incoming requests.
 
 ## How it maps to the roadmap's screens
 
@@ -119,8 +209,9 @@ just delete the seeded rows).
 
 - Payments are simulated (no real Stripe calls); `process_payment()` is the
   place to wire in a real payment provider.
-- Email confirmation is simulated — the code is returned in the signup
-  response instead of being emailed.
+- Email confirmation (signup OTP) is simulated — the code is returned in
+  the signup response instead of being emailed. (Rent-request notifications
+  *are* real email, via Resend — see above.)
 - `POST /api/stadiums` is unauthenticated (there's no admin role yet).
 - `preferred_teams` is collected and stored but not yet used in
   `suggest_stadium()` scoring.
@@ -128,5 +219,5 @@ just delete the seeded rows).
   swap in a proper market-comps model when you have data.
   (`filter_by_location()` now uses real haversine distance with a
   city-coordinates lookup for the renter's side.)
-- SQLite by default — for production, point `PALCOS_DATABASE_URL` at
-  Postgres; the same Alembic migrations apply there.
+- SQLite by default when `PALCOS_DATABASE_URL` is unset — production uses
+  Postgres (Neon); the same Alembic migrations apply either way.
