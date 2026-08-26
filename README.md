@@ -42,6 +42,12 @@ both local dev and the live deployment.
 
 ## What changed most recently
 
+- **Rent requests now collect event details**, not just a free-text
+  comment: occasion, affiliated company (optional), expected/max guest
+  counts, and whether the renter needs catering or provides their own.
+  Stored on both `RentRequest` and its owner-facing `BoxRequest` mirror,
+  validated server-side (all required except company; max guests can't be
+  below expected), and included in the new-request notification email.
 - **Signup confirmation codes are real email now**, not shown on screen —
   sent inline (synchronously, not via `runner.py`) so the code arrives
   immediately. Falls back to the old on-screen/console behavior only when

@@ -211,8 +211,10 @@ def request_to_json(r):
     return {
         "id": r.id, "box_id": r.box_id, "renter_id": r.renter_id, "date": r.date,
         "price": r.price, "status": r.status, "reject_reason": r.reject_reason,
-        "message": r.message, "payment": r.payment, "instructions": r.instructions,
-        "survey": r.survey,
+        "message": r.message, "event_type": r.event_type, "company": r.company,
+        "expected_guests": r.expected_guests, "max_guests": r.max_guests,
+        "needs_catering": r.needs_catering, "payment": r.payment,
+        "instructions": r.instructions, "survey": r.survey,
     }
 
 
@@ -434,7 +436,12 @@ def _renters_request_or_error(request_id):
 def api_create_request():
     d = request.json or {}
     try:
-        r = engine.create_rent_request(current_user().id, d["box_id"], d["date"], d.get("message", ""))
+        r = engine.create_rent_request(
+            current_user().id, d["box_id"], d["date"], d.get("message", ""),
+            event_type=d["event_type"], company=d.get("company", ""),
+            expected_guests=int(d["expected_guests"]), max_guests=int(d["max_guests"]),
+            needs_catering=bool(d["needs_catering"]),
+        )
         return jsonify(request_to_json(r)), 201
     except (KeyError, ValueError) as e:
         return err(e)

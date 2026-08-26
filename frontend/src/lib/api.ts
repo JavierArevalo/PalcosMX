@@ -111,6 +111,11 @@ export interface RentRequest {
   status: "pending" | "accepted" | "rejected" | "paid" | "completed";
   reject_reason: string | null;
   message: string;
+  event_type: string | null;
+  company: string | null;
+  expected_guests: number | null;
+  max_guests: number | null;
+  needs_catering: boolean | null;
   payment: Record<string, unknown> | null;
   instructions: string | null;
   survey: Record<string, unknown> | null;
@@ -134,6 +139,11 @@ export interface BoxRequest {
   renter_name: string;
   date: string;
   message: string;
+  event_type: string | null;
+  company: string | null;
+  expected_guests: number | null;
+  max_guests: number | null;
+  needs_catering: boolean | null;
   status: string;
   reject_reason?: string | null;
   requested_at?: string;

@@ -46,6 +46,22 @@ def send_confirmation_code_email(user, code: str) -> None:
 
 def send_new_request_email(owner, box, rent_request) -> None:
     """A renter just requested one of the owner's dates."""
+    details = []
+    if rent_request.event_type:
+        details.append(f"<strong>Evento:</strong> {rent_request.event_type}")
+    if rent_request.company:
+        details.append(f"<strong>Empresa:</strong> {rent_request.company}")
+    if rent_request.expected_guests is not None:
+        guests = f"{rent_request.expected_guests}"
+        if rent_request.max_guests is not None and rent_request.max_guests != rent_request.expected_guests:
+            guests += f" (máx. {rent_request.max_guests})"
+        details.append(f"<strong>Invitados:</strong> {guests}")
+    if rent_request.needs_catering is not None:
+        catering = "Necesita catering" if rent_request.needs_catering else "Lo provee el arrendatario"
+        details.append(f"<strong>Catering:</strong> {catering}")
+    details_html = (
+        "<ul>" + "".join(f"<li>{d}</li>" for d in details) + "</ul>" if details else ""
+    )
     note = f"<p>Mensaje del arrendatario: &ldquo;{rent_request.message}&rdquo;</p>" if rent_request.message else ""
     solicitudes_url = f"{APP_BASE_URL}/solicitudes"
     _send(
@@ -55,6 +71,7 @@ def send_new_request_email(owner, box, rent_request) -> None:
         f"<p>Tienes una nueva solicitud de renta para tu palco "
         f"({box.location_in_stadium or box.id}) el <strong>{rent_request.date}</strong>, "
         f"por ${rent_request.price:,.0f} MXN.</p>"
+        f"{details_html}"
         f"{note}"
         f'<p><a href="{solicitudes_url}">Ver la solicitud y responder</a> '
         f"(requiere iniciar sesión con tu cuenta de propietario).</p>",

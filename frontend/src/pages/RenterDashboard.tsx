@@ -61,6 +61,13 @@ function RequestCard({ request, onSurvey }: { request: RentRequest; onSurvey: (i
           <div className="text-lg font-semibold text-white" style={serif}>
             {formatDate(request.date)} · <span className="text-gold-gradient">{formatMXN(request.price)}</span>
           </div>
+          {request.event_type && (
+            <div className="text-xs text-[oklch(0.58_0.010_260)] mt-0.5" style={outfit}>
+              {request.event_type}
+              {request.company ? ` · ${request.company}` : ""}
+              {request.expected_guests != null ? ` · ${request.expected_guests} invitados` : ""}
+            </div>
+          )}
           {request.message && (
             <div className="text-xs text-[oklch(0.58_0.010_260)] italic mt-0.5" style={outfit}>
               "{request.message}"

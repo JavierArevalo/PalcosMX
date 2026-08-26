@@ -75,6 +75,39 @@ export default function RequestRow({ request, box }: { request: BoxRequest; box:
           {formatDate(request.date)} · {box.description || "Suite Privada"}
           {box.location_in_stadium ? ` (${box.location_in_stadium})` : ""}
         </div>
+
+        {(request.event_type || request.company || request.expected_guests != null) && (
+          <div className="text-xs text-[oklch(0.75_0.008_80)] mt-1.5 space-y-0.5" style={outfit}>
+            {request.event_type && (
+              <div>
+                <span className="text-[oklch(0.50_0.008_260)]">Evento: </span>
+                {request.event_type}
+              </div>
+            )}
+            {request.company && (
+              <div>
+                <span className="text-[oklch(0.50_0.008_260)]">Empresa: </span>
+                {request.company}
+              </div>
+            )}
+            {request.expected_guests != null && (
+              <div>
+                <span className="text-[oklch(0.50_0.008_260)]">Invitados: </span>
+                {request.expected_guests}
+                {request.max_guests != null && request.max_guests !== request.expected_guests
+                  ? ` (máx. ${request.max_guests})`
+                  : ""}
+              </div>
+            )}
+            {request.needs_catering != null && (
+              <div>
+                <span className="text-[oklch(0.50_0.008_260)]">Catering: </span>
+                {request.needs_catering ? "Necesita catering" : "Lo provee el arrendatario"}
+              </div>
+            )}
+          </div>
+        )}
+
         {request.message && (
           <div className="text-xs text-[oklch(0.72_0.010_260)] italic mt-1" style={outfit}>
             "{request.message}"

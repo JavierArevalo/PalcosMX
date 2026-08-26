@@ -88,6 +88,11 @@ class BoxRequest(Base):
     renter_name: Mapped[str] = mapped_column(String)
     date: Mapped[str] = mapped_column(String)
     message: Mapped[str] = mapped_column(String, default="")           # optional note from renter to owner
+    event_type: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    company: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    expected_guests: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    max_guests: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    needs_catering: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
     renter_history: Mapped[list] = mapped_column(JSON, default=list)   # summarized past bookings for this renter
     status: Mapped[str] = mapped_column(String, default="pending")     # pending | accepted | rejected
     reject_reason: Mapped[Optional[str]] = mapped_column(String, nullable=True)
@@ -103,6 +108,11 @@ class BoxRequest(Base):
             "renter_name": self.renter_name,
             "date": self.date,
             "message": self.message,
+            "event_type": self.event_type,
+            "company": self.company,
+            "expected_guests": self.expected_guests,
+            "max_guests": self.max_guests,
+            "needs_catering": self.needs_catering,
             "renter_history": self.renter_history,
             "status": self.status,
             "reject_reason": self.reject_reason,
@@ -436,6 +446,14 @@ class RentRequest(Base):
     status: Mapped[str] = mapped_column(String, default="pending")  # pending | accepted | rejected | paid | completed
     reject_reason: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     message: Mapped[str] = mapped_column(String, default="")        # optional note from renter to owner
+    # Event details collected on the request form, surfaced to the owner
+    # both in the app (BoxRequest mirrors these) and in the notification
+    # email (see notifications.send_new_request_email).
+    event_type: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    company: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    expected_guests: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    max_guests: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    needs_catering: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
     renter_snapshot: Mapped[dict] = mapped_column(JSON, default=dict)  # history/email/social, etc.
     payment: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     instructions: Mapped[Optional[str]] = mapped_column(Text, nullable=True)

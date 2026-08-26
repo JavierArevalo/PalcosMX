@@ -133,14 +133,16 @@ class BookingEngine:
         return renter
 
     def create_rent_request(self, renter_id: str, box_id: str, date: str,
-                             message: str = "") -> RentRequest:
+                             message: str = "", event_type: str = "", company: str = "",
+                             expected_guests: Optional[int] = None, max_guests: Optional[int] = None,
+                             needs_catering: Optional[bool] = None) -> RentRequest:
         """Renter (or an owner acting as one — owners can rent any box but
         their own) selects a box+date to rent. Builds a request object with
-        renter's info and sends it to the booking engine (process_rent_request).
-        Also records a BoxRequest directly on the box so the owner can see,
-        for that specific date, who requested it and with what history —
-        several renters can request the same date, so the box keeps all
-        of them until one is accepted."""
+        renter's info and event details, and sends it to the booking engine
+        (process_rent_request). Also records a BoxRequest directly on the
+        box so the owner can see, for that specific date, who requested it
+        and with what history — several renters can request the same date,
+        so the box keeps all of them until one is accepted."""
         renter = self._get_renter(renter_id)
         box = self._get_box(box_id)
         if box.owner_id == renter_id:
@@ -148,6 +150,8 @@ class BookingEngine:
         listing = box.find_listing(date)
         if listing is None:
             raise ValueError("No listing available for that date")
+        if max_guests is not None and expected_guests is not None and max_guests < expected_guests:
+            raise ValueError("El máximo de invitados no puede ser menor al número esperado.")
 
         # Snapshot the renter's track record BEFORE adding this request.
         history_summary = self._renter_history_summary(renter)
@@ -159,6 +163,11 @@ class BookingEngine:
             date=date,
             price=listing.price,
             message=message,
+            event_type=event_type,
+            company=company,
+            expected_guests=expected_guests,
+            max_guests=max_guests,
+            needs_catering=needs_catering,
             respond_by=compute_respond_by(date),
             renter_snapshot={
                 "email": renter.email,
@@ -176,6 +185,11 @@ class BookingEngine:
             renter_name=renter.name,
             date=date,
             message=message,
+            event_type=event_type,
+            company=company,
+            expected_guests=expected_guests,
+            max_guests=max_guests,
+            needs_catering=needs_catering,
             renter_history=history_summary,
         ))
         db_session.flush()
