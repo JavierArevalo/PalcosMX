@@ -4,9 +4,10 @@ Session-based authentication + onboarding (roadmap Screens 1-2) for Palcos.
 
 - Passwords hashed with werkzeug (see models.User).
 - Identity lives in Flask's server-signed session cookie: user_id + role.
-- Email confirmation is SIMULATED: a 6-digit code is generated at signup,
-  printed to the server log and returned in the response as
-  `demo_confirmation_code` (a real product would email it instead).
+- Email confirmation: a 6-digit code is generated at signup and emailed via
+  notifications.py (real send if RESEND_API_KEY is set; otherwise printed
+  and returned in the response as `demo_confirmation_code`, so local dev
+  without a Resend key still works — see _new_confirmation_code).
 - Unconfirmed users can log in and browse, but transactional writes
   (creating boxes/listings, accepting/rejecting, requesting, paying) are
   gated behind `confirmed_required`.
@@ -19,6 +20,7 @@ from functools import wraps
 from flask import Blueprint, request, session, jsonify
 from sqlalchemy.exc import IntegrityError
 
+import notifications
 from db import db_session
 from models import User
 
@@ -108,11 +110,21 @@ def _me_json(user: User) -> dict:
 
 
 def _new_confirmation_code(user: User) -> str:
-    """Simulated Screen-2 email: generate + 'send' (log) a 6-digit code."""
+    """Screen-2: generate and email a 6-digit code (real send via Resend if
+    configured; simulated/printed otherwise — see notifications.py)."""
     code = f"{secrets.randbelow(1_000_000):06d}"
     user.confirmation_code = code
-    print(f"[palcos] Simulated confirmation email to {user.email}: your code is {code}")
+    notifications.send_confirmation_code_email(user, code)
     return code
+
+
+def _confirmation_response(code: str) -> dict:
+    """Only include the code in the API response when there's no real email
+    configured to deliver it — otherwise showing it here would defeat the
+    point of confirming account ownership."""
+    if not notifications.resend.api_key:
+        return {"demo_confirmation_code": code}
+    return {}
 
 
 # ---------------------------------------------------------------------------
@@ -149,7 +161,7 @@ def signup():
 
     code = _new_confirmation_code(user)
     _login(user)
-    return jsonify({**_me_json(user), "demo_confirmation_code": code}), 201
+    return jsonify({**_me_json(user), **_confirmation_response(code)}), 201
 
 
 @bp.post("/confirm")
@@ -172,7 +184,7 @@ def resend_code():
     if user.confirmed:
         return jsonify({"error": "Account is already confirmed"}), 400
     code = _new_confirmation_code(user)
-    return jsonify({"demo_confirmation_code": code})
+    return jsonify(_confirmation_response(code))
 
 @bp.post("/payment-method")
 @login_required

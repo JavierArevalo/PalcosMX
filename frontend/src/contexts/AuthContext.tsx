@@ -90,8 +90,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     },
 
     async resendCode() {
-      const res = await post<{ demo_confirmation_code: string }>("/api/auth/resend-code");
-      setDemoCode(res.demo_confirmation_code);
+      // demo_confirmation_code is only present when there's no real email
+      // configured server-side (see auth.py's _confirmation_response).
+      const res = await post<{ demo_confirmation_code?: string }>("/api/auth/resend-code");
+      setDemoCode(res.demo_confirmation_code ?? null);
     },
 
     async logout() {

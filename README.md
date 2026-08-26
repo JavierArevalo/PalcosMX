@@ -42,6 +42,10 @@ both local dev and the live deployment.
 
 ## What changed most recently
 
+- **Signup confirmation codes are real email now**, not shown on screen —
+  sent inline (synchronously, not via `runner.py`) so the code arrives
+  immediately. Falls back to the old on-screen/console behavior only when
+  `RESEND_API_KEY` isn't configured (local dev).
 - **Connected to a real database** — Neon Postgres, via `PALCOS_DATABASE_URL`
   (falls back to local SQLite if unset). Schema managed by Alembic
   migrations, auto-upgraded on startup.
@@ -175,12 +179,14 @@ delete the seeded rows directly).
   (`create_owner_account`, `create_private_box`, `add_listing`,
   `remove_listing`), and the renter feed (`suggest_stadium`,
   `filter_by_location`, `filter_by_stadium`, `show_best_deals`).
-- `auth.py` — session-based auth + onboarding: signup (Screen 1), simulated
-  email confirmation (Screen 2), login/logout/me. Identity lives in a
-  server-signed session cookie (7-day persistence); set `PALCOS_SECRET_KEY`
-  in the environment for anything beyond local dev.
-- `notifications.py` — outbound emails for the rent-request lifecycle via
-  Resend; simulated (printed) without an API key.
+- `auth.py` — session-based auth + onboarding: signup (Screen 1), emailed
+  OTP confirmation (Screen 2, via `notifications.py`, sent inline rather
+  than through `runner.py` since it's needed right away), login/logout/me.
+  Identity lives in a server-signed session cookie (7-day persistence);
+  set `PALCOS_SECRET_KEY` in the environment for anything beyond local dev.
+- `notifications.py` — outbound emails: the signup/resend confirmation
+  code (sent inline from `auth.py`) and the rent-request lifecycle emails
+  (sent by `runner.py`) via Resend; simulated (printed) without an API key.
 - `runner.py` — standalone job that drives the notification/deadline
   pipeline; decoupled from the web process on purpose (see "Tech stack").
 - `app.py` — the Flask REST API over the engine, plus the SPA catch-all
@@ -202,10 +208,11 @@ delete the seeded rows directly).
 
 - Screen 1 (create account) → `/acceso` (role choice; renters must link at
   least one social account so owners can vet requests).
-- Screen 2 (confirm account) → `/confirmar` (OTP input). The email is
-  simulated: the code is shown on screen and printed to the server log.
-  Unconfirmed users can browse but can't transact (create boxes/listings,
-  request, pay) until confirmed.
+- Screen 2 (confirm account) → `/confirmar` (OTP input). The code is
+  emailed via Resend; without `RESEND_API_KEY` configured it falls back to
+  being shown on screen and printed to the server log instead. Unconfirmed
+  users can browse but can't transact (create boxes/listings, request, pay)
+  until confirmed.
 - Screen 3 (preferences) → `/preferencias` (onboarding) and the
   Preferencias card in `/mis-reservas`: price range, capacity bucket,
   preferred stadiums, preferred teams, location.
@@ -220,9 +227,6 @@ delete the seeded rows directly).
 
 - Payments are simulated (no real Stripe calls); `process_payment()` is the
   place to wire in a real payment provider.
-- Email confirmation (signup OTP) is simulated — the code is returned in
-  the signup response instead of being emailed. (Rent-request notifications
-  *are* real email, via Resend — see above.)
 - `POST /api/stadiums` is unauthenticated (there's no admin role yet).
 - `preferred_teams` is collected and stored but not yet used in
   `suggest_stadium()` scoring.

@@ -1,11 +1,13 @@
 """
 notifications.py
-Outbound email notifications for the rent-request lifecycle — sent by
-runner.py, not inline in the request handlers (see app.py / runner.py).
+Outbound email — the rent-request lifecycle emails are sent by runner.py
+(deliberately decoupled, see runner.py); the signup/resend confirmation
+code is sent inline, synchronously, from auth.py, since it's needed right
+away rather than on a polling schedule.
 
 Uses Resend (https://resend.com). If RESEND_API_KEY isn't set, sends are
-simulated (printed) instead of attempted — same spirit as the signup OTP
-in auth.py, so local dev works without a real account.
+simulated (printed) instead of attempted, so local dev works without a
+real account.
 """
 import os
 
@@ -26,6 +28,20 @@ def _send(to: str, subject: str, html: str) -> None:
         resend.Emails.send({"from": FROM_EMAIL, "to": to, "subject": subject, "html": html})
     except Exception as e:
         print(f"[palcos] Failed to send email to {to}: {e}")
+
+
+def send_confirmation_code_email(user, code: str) -> None:
+    """Signup (or resend): the 6-digit account confirmation code."""
+    confirm_url = f"{APP_BASE_URL}/confirmar"
+    _send(
+        user.email,
+        "Tu código de confirmación de Palcos",
+        f"<p>Hola {user.name},</p>"
+        f"<p>Tu código de confirmación es:</p>"
+        f'<p style="font-size: 28px; font-weight: bold; letter-spacing: 6px;">{code}</p>'
+        f'<p>Ingrésalo en la <a href="{confirm_url}">página de confirmación</a> '
+        f"para activar tu cuenta.</p>",
+    )
 
 
 def send_new_request_email(owner, box, rent_request) -> None:

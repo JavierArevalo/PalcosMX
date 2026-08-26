@@ -1,6 +1,7 @@
 /**
- * /confirmar — Screen 2: verify the account with the (simulated) email code.
- * The demo code is surfaced in a gold alert since no real email is sent.
+ * /confirmar — Screen 2: verify the account with the emailed code. The
+ * gold alert only appears as a local-dev fallback when no real email
+ * provider is configured server-side (see auth.py's _confirmation_response).
  */
 import { useState } from "react";
 import { useLocation } from "wouter";
@@ -49,7 +50,7 @@ export default function Confirm() {
   const handleResend = async () => {
     try {
       await resendCode();
-      toast.success("Código reenviado — revisa el recuadro dorado.");
+      toast.success("Código reenviado — revisa tu correo.");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "No se pudo reenviar el código");
     }
