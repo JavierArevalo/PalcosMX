@@ -40,6 +40,10 @@ function RequestCard({ request, onSurvey }: { request: RentRequest; onSurvey: (i
     }
   };
 
+  // No real payment gateway yet — this is a self-reported toggle. Marking
+  // it here is also what locks in the date: any other pending request for
+  // this box/date gets auto-rejected only at this point (see
+  // process_payment), not when the owner first accepted this one.
   const pay = () =>
     run(
       () =>
@@ -93,7 +97,7 @@ function RequestCard({ request, onSurvey }: { request: RentRequest; onSurvey: (i
       <div className="flex flex-wrap gap-2">
         {request.status === "accepted" && (
           <Button onClick={pay} disabled={busy} size="sm" className="btn-gold rounded-sm">
-            <CreditCard size={14} /> Pagar y confirmar ({formatMXN(request.price)} + depósito)
+            <CreditCard size={14} /> Marcar Pago Completado ({formatMXN(request.price)} + depósito)
           </Button>
         )}
         {request.status === "paid" && (

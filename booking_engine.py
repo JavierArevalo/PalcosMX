@@ -270,9 +270,17 @@ class BookingEngine:
     def accept_booking(self, request_id: str) -> RentRequest:
         """Owner accepts one of possibly several pending requests for the
         same box/date. Marks it 'accepted' and emails the renter (next
-        step: payment). All other pending requests for the same box/date
-        are auto-rejected — via reject_booking, so their renters get
-        emailed too."""
+        step: payment) — but does NOT reject the other pending requests
+        yet: they stay available as backups in case this one doesn't pay
+        in time, letting the owner accept a secondary request instead. All
+        pending requests are only auto-rejected once one of them actually
+        gets paid (see process_payment).
+
+        If a DIFFERENT request for the same box/date is still 'accepted'
+        (the owner is now accepting a secondary candidate because the
+        first never paid), that stale acceptance is superseded/rejected
+        now — only one request can be 'accepted' at a time per box/date,
+        since only one can go on to actually pay."""
         request = self._get_request(request_id)
         box = self._get_box(request.box_id)
         request.status = "accepted"
@@ -281,15 +289,15 @@ class BookingEngine:
         renter = self._get_renter(request.renter_id)
         notifications.send_request_accepted_email(renter, box, request)
 
-        others = db_session.scalars(
+        stale_accepted = db_session.scalars(
             select(RentRequest).where(
                 RentRequest.id != request.id,
                 RentRequest.box_id == request.box_id,
                 RentRequest.date == request.date,
-                RentRequest.status == "pending",
+                RentRequest.status == "accepted",
             ))
-        for other in others:
-            self.reject_booking(other.id, reason="Otra solicitud anterior fue aceptada para este palco y fecha.")
+        for other in stale_accepted:
+            self.reject_booking(other.id, reason="El propietario aceptó otra solicitud para este palco y fecha.")
         db_session.flush()
         return request
 
@@ -312,7 +320,12 @@ class BookingEngine:
                          amount: float, deposit: float) -> RentRequest:
         """Once a request is accepted, the renter submits payment + deposit
         (deposit should be >= rent price, standard or owner-decided).
-        Money is conceptually held in escrow until the visit completes."""
+        Money is conceptually held in escrow until the visit completes.
+
+        This is the point the date is truly locked in, so it's also when
+        every other request for the same box/date — pending or a stale
+        'accepted' — gets auto-rejected (their renters notified), not at
+        accept_booking time (see there for why)."""
         request = self._get_request(request_id)
         if request.status != "accepted":
             raise ValueError("Request must be accepted before payment can be submitted")
@@ -342,6 +355,17 @@ class BookingEngine:
             location_in_stadium=box.location_in_stadium,
             event_description=request.renter_snapshot.get("event_description", ""),
         ))
+
+        others = db_session.scalars(
+            select(RentRequest).where(
+                RentRequest.id != request.id,
+                RentRequest.box_id == request.box_id,
+                RentRequest.date == request.date,
+                RentRequest.status.in_(["pending", "accepted"]),
+            ))
+        for other in others:
+            self.reject_booking(other.id, reason="El palco ya fue confirmado con otro arrendatario para esta fecha.")
+
         db_session.flush()
         return request
 

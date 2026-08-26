@@ -42,6 +42,16 @@ both local dev and the live deployment.
 
 ## What changed most recently
 
+- **Competing requests are only rejected at payment time, not at accept
+  time.** Accepting a request no longer mass-rejects every other pending
+  request for that box/date — they stay available as backups. If the
+  owner accepts a *different* (secondary) request later because the first
+  never paid, that stale acceptance is superseded/rejected then. Every
+  remaining pending/accepted request only gets auto-rejected once someone
+  actually marks payment complete (`process_payment`) — that's the point
+  the date is truly locked in. The renter's "Marcar Pago Completado"
+  button (`/mis-reservas`) is what triggers this, since there's no real
+  payment gateway yet.
 - **Renters get emailed on accept/reject** — previously only the owner-side
   notifications existed; accepting/rejecting a request now emails the
   renter too (accepted → go pay; rejected → reason if given, plus a link
