@@ -24,6 +24,7 @@ from typing import Optional
 
 from sqlalchemy import select
 
+import notifications
 from db import db_session
 from models import (
     new_id, PrivateBox, Stadium, Owner, Renter, User, Listing, BookingRecord,
@@ -268,12 +269,17 @@ class BookingEngine:
 
     def accept_booking(self, request_id: str) -> RentRequest:
         """Owner accepts one of possibly several pending requests for the
-        same box/date. Marks it 'accepted' and notifies the renter (next
+        same box/date. Marks it 'accepted' and emails the renter (next
         step: payment). All other pending requests for the same box/date
-        are auto-rejected with a standard reason."""
+        are auto-rejected — via reject_booking, so their renters get
+        emailed too."""
         request = self._get_request(request_id)
+        box = self._get_box(request.box_id)
         request.status = "accepted"
-        self._get_box(request.box_id).set_request_status(request_id, "accepted")
+        box.set_request_status(request_id, "accepted")
+
+        renter = self._get_renter(request.renter_id)
+        notifications.send_request_accepted_email(renter, box, request)
 
         others = db_session.scalars(
             select(RentRequest).where(
@@ -283,18 +289,23 @@ class BookingEngine:
                 RentRequest.status == "pending",
             ))
         for other in others:
-            self.reject_booking(other.id, reason="Another earlier request was accepted for this box/date.")
+            self.reject_booking(other.id, reason="Otra solicitud anterior fue aceptada para este palco y fecha.")
         db_session.flush()
         return request
 
-    def reject_booking(self, request_id: str, reason: str = "The owner withdrew their listing.") -> RentRequest:
-        """Owner declines a request. Renter is notified promptly with a
-        standard reason and shown similar listings."""
+    def reject_booking(self, request_id: str, reason: str = "El propietario retiró su publicación.") -> RentRequest:
+        """Owner declines a request (or it's auto-rejected as a side effect
+        of another request being accepted for the same box/date). Renter
+        is emailed with the reason."""
         request = self._get_request(request_id)
+        box = self._get_box(request.box_id)
         request.status = "rejected"
         request.reject_reason = reason
-        self._get_box(request.box_id).set_request_status(request_id, "rejected", reason)
+        box.set_request_status(request_id, "rejected", reason)
         db_session.flush()
+
+        renter = self._get_renter(request.renter_id)
+        notifications.send_request_rejected_email(renter, box, request)
         return request
 
     def process_payment(self, request_id: str, provider: str, token: str,

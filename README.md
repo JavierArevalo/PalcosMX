@@ -42,6 +42,14 @@ both local dev and the live deployment.
 
 ## What changed most recently
 
+- **Renters get emailed on accept/reject** — previously only the owner-side
+  notifications existed; accepting/rejecting a request now emails the
+  renter too (accepted → go pay; rejected → reason if given, plus a link
+  to explore other boxes). Sent inline from `accept_booking`/
+  `reject_booking` in `booking_engine.py`, not `runner.py` — same
+  immediate-action reasoning as the confirmation-code email. This also
+  covers the case where accepting one request auto-rejects competing
+  ones for the same box/date — those renters get the rejection email too.
 - **Rent requests now collect event details**, not just a free-text
   comment: occasion, affiliated company (optional), expected/max guest
   counts, and whether the renter needs catering or provides their own.

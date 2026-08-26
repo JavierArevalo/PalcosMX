@@ -94,6 +94,36 @@ def send_response_reminder_email(owner, box, rent_request) -> None:
     )
 
 
+def send_request_accepted_email(renter, box, rent_request) -> None:
+    """The owner accepted the request — next step is payment."""
+    mis_reservas_url = f"{APP_BASE_URL}/mis-reservas"
+    _send(
+        renter.email,
+        f"¡Tu solicitud fue aceptada! — {rent_request.date}",
+        f"<p>Hola {renter.name},</p>"
+        f"<p>El propietario aceptó tu solicitud para el palco "
+        f"({box.location_in_stadium or box.id}) el <strong>{rent_request.date}</strong>, "
+        f"por ${rent_request.price:,.0f} MXN.</p>"
+        f'<p><a href="{mis_reservas_url}">Ve a Mis Reservas para pagar y confirmar</a>.</p>',
+    )
+
+
+def send_request_rejected_email(renter, box, rent_request) -> None:
+    """The owner declined the request (or it lost out to another request
+    for the same box/date) — let the renter know, with the reason if any."""
+    explore_url = f"{APP_BASE_URL}/explorar"
+    reason_html = f"<p>Motivo: {rent_request.reject_reason}</p>" if rent_request.reject_reason else ""
+    _send(
+        renter.email,
+        f"Tu solicitud fue rechazada — {rent_request.date}",
+        f"<p>Hola {renter.name},</p>"
+        f"<p>El propietario rechazó tu solicitud para el palco "
+        f"({box.location_in_stadium or box.id}) el <strong>{rent_request.date}</strong>.</p>"
+        f"{reason_html}"
+        f'<p><a href="{explore_url}">Explora otros palcos disponibles</a> para esa fecha.</p>',
+    )
+
+
 def send_auto_rejected_email(renter, box, rent_request) -> None:
     """The owner didn't respond in time and the request was auto-rejected —
     let the renter know so they can look at other boxes."""

@@ -466,7 +466,7 @@ def api_reject(request_id):
         return error
     d = request.json or {}
     return jsonify(request_to_json(
-        engine.reject_booking(r.id, d.get("reason", "The owner withdrew their listing."))))
+        engine.reject_booking(r.id, d.get("reason", "El propietario retiró su publicación."))))
 
 
 @app.post("/api/requests/<request_id>/payment")
