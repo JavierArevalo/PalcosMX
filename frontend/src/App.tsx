@@ -33,7 +33,9 @@ function Router() {
         </RequireAuth>
       </Route>
       <Route path="/mis-reservas">
-        <RequireAuth role="renter">
+        {/* No role restriction — owners can rent too (just not their own
+            boxes), so they need access to their own rental history here. */}
+        <RequireAuth>
           <RenterDashboard />
         </RequireAuth>
       </Route>

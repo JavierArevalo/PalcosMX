@@ -15,6 +15,10 @@ with Base44 touches). **Live at [palcos.onrender.com](https://palcos.onrender.co
 
 - [ ] Test and send real notification emails to actual renters/owners (not
   just the demo accounts) to confirm deliverability at small scale.
+- [ ] Renter → owner account upgrade path — currently a renter can't become
+  an owner without a separate signup; owners can already rent (see below).
+- [ ] Real payment integration (`process_payment()` is the Stripe
+  integration point) — low priority for now.
 
 ## Owner demo accounts
 
@@ -71,6 +75,13 @@ both local dev and the live deployment.
   destination afterward instead of a generic page.
 - **7-day persistent login sessions** — previously the session cookie
   expired as soon as the browser closed.
+- **Owners can rent too** — an owner account can submit rent requests for
+  any box they don't own, and go through the full renter lifecycle (pay,
+  get instructions, leave a survey) at `/mis-reservas`, same as a plain
+  renter. Requesting your own box is blocked with a clear error, both in
+  the UI (`Explore.tsx`, before the dialog even opens) and server-side
+  (`create_rent_request` — the authoritative check). A renter still can't
+  become an owner without a separate account (see "Next steps").
 
 ## Tech stack
 

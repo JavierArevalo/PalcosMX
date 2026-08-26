@@ -12,6 +12,7 @@ import PageHeading from "@/components/PageHeading";
 import StatusBadge from "@/components/StatusBadge";
 import SurveyDialog from "@/components/renter/SurveyDialog";
 import PreferencesForm from "@/components/renter/PreferencesForm";
+import { useAuth } from "@/contexts/AuthContext";
 import { api, post, type RentRequest } from "@/lib/api";
 import { formatMXN, formatDate } from "@/lib/format";
 import { Button } from "@/components/ui/button";
@@ -109,11 +110,18 @@ function RequestCard({ request, onSurvey }: { request: RentRequest; onSurvey: (i
 }
 
 export default function RenterDashboard() {
+  const { user } = useAuth();
   const [surveyTarget, setSurveyTarget] = useState<string | null>(null);
   const { data: requests, isLoading } = useQuery({
     queryKey: ["myRequests"],
     queryFn: () => api<RentRequest[]>("/api/my/requests"),
   });
+
+  // Preferences drive the "Sugeridos"/"Cerca de mí" feed personalization,
+  // which is renter-only for now — owners can rent, but don't get a
+  // preferences form they couldn't actually save (PUT /api/my/preferences
+  // stays role-gated to renter).
+  const showPreferences = user?.role === "renter";
 
   return (
     <AppShell>
@@ -124,9 +132,9 @@ export default function RenterDashboard() {
         subtitle="Sigue tus solicitudes: del envío al pago y las instrucciones de acceso."
       />
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
+      <div className={showPreferences ? "grid grid-cols-1 lg:grid-cols-3 gap-8 items-start" : ""}>
         {/* Requests */}
-        <div className="lg:col-span-2 space-y-4">
+        <div className={showPreferences ? "lg:col-span-2 space-y-4" : "space-y-4 max-w-4xl"}>
           {isLoading ? (
             Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-28 w-full rounded-lg" />)
           ) : requests && requests.length > 0 ? (
@@ -138,13 +146,15 @@ export default function RenterDashboard() {
           )}
         </div>
 
-        {/* Preferences */}
-        <div className="bg-[oklch(0.13_0.007_260)] border border-white/6 rounded-lg p-6">
-          <h2 className="text-2xl font-semibold text-white mb-4" style={serif}>
-            Mis <span className="text-gold-gradient italic">Preferencias</span>
-          </h2>
-          <PreferencesForm />
-        </div>
+        {/* Preferences (renters only) */}
+        {showPreferences && (
+          <div className="bg-[oklch(0.13_0.007_260)] border border-white/6 rounded-lg p-6">
+            <h2 className="text-2xl font-semibold text-white mb-4" style={serif}>
+              Mis <span className="text-gold-gradient italic">Preferencias</span>
+            </h2>
+            <PreferencesForm />
+          </div>
+        )}
       </div>
 
       <SurveyDialog requestId={surveyTarget} onClose={() => setSurveyTarget(null)} />

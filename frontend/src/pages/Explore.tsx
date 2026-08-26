@@ -98,12 +98,13 @@ export default function Explore() {
 
   const handleRequest = (entry: FeedEntry) => {
     if (!user) {
-      toast.info("Inicia sesión como arrendatario para solicitar una suite.");
+      toast.info("Inicia sesión para solicitar una suite.");
       navigate("/acceso");
       return;
     }
-    if (user.role !== "renter") {
-      toast.error("Las solicitudes son para cuentas de arrendatario — has iniciado sesión como propietario.");
+    // Owners can rent too — just not their own palco.
+    if (entry.owner_id === user.id) {
+      toast.error("Este palco es tuyo — solo puedes rentar palcos de otros propietarios.");
       return;
     }
     setRequestTarget(entry);

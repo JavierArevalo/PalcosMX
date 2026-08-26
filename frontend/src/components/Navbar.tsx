@@ -38,8 +38,9 @@ export default function Navbar({ solid = false }: { solid?: boolean }) {
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
-  // Renters get a link to their bookings; owners get a link to their dashboard.
-  const reservationLink = user?.role === "renter" ? { label: "Mis Reservas", href: "/mis-reservas" } : null;
+  // Everyone gets a link to their rental history — owners can rent too
+  // (just not their own boxes), on top of whatever owner-only links follow.
+  const reservationLink = user ? { label: "Mis Reservas", href: "/mis-reservas" } : null;
   const isOwner = user?.role === "owner";
 
   // Not an owner yet: send them to signup with the owner role preselected.

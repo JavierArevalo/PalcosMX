@@ -189,6 +189,7 @@ def entry_to_json(entry, ratings=None):
         "capacity": listing.capacity,
         "description": listing.description,
         "box_id": box.id,
+        "owner_id": box.owner_id,
         "box_description": box.description,
         "box_location": box.location_in_stadium,
         "stadium_id": box.stadium_id,
@@ -321,12 +322,11 @@ def api_remove_listing(box_id, date):
 @app.get("/api/my/requests")
 @login_required
 def api_my_requests():
-    user = current_user()
-    if user.role == "owner":
-        status = request.args.get("status")
-        reqs = engine.list_requests_for_owner(user.id, status=status)
-    else:
-        reqs = engine.list_requests_for_renter(user.id)
+    """Requests the current user submitted AS A RENTER — regardless of
+    their account role, since owners can also rent (see create_rent_request).
+    Requests AGAINST an owner's own boxes live at /api/boxes/<id>/requests
+    and /solicitudes instead."""
+    reqs = engine.list_requests_for_renter(current_user().id)
     return jsonify([request_to_json(r) for r in reqs])
 
 
@@ -429,7 +429,7 @@ def _renters_request_or_error(request_id):
 
 
 @app.post("/api/requests")
-@role_required("renter")
+@login_required
 @confirmed_required
 def api_create_request():
     d = request.json or {}
@@ -463,7 +463,7 @@ def api_reject(request_id):
 
 
 @app.post("/api/requests/<request_id>/payment")
-@role_required("renter")
+@login_required
 @confirmed_required
 def api_payment(request_id):
     r, error = _renters_request_or_error(request_id)
@@ -479,7 +479,7 @@ def api_payment(request_id):
 
 
 @app.get("/api/requests/<request_id>/instructions")
-@role_required("renter")
+@login_required
 def api_instructions(request_id):
     r, error = _renters_request_or_error(request_id)
     if error:
@@ -492,7 +492,7 @@ def api_instructions(request_id):
 
 
 @app.post("/api/requests/<request_id>/survey")
-@role_required("renter")
+@login_required
 def api_survey(request_id):
     r, error = _renters_request_or_error(request_id)
     if error:

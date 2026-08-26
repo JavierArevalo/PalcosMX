@@ -90,6 +90,7 @@ export interface FeedEntry {
   capacity: number;
   description: string;
   box_id: string;
+  owner_id: string;
   box_description: string;
   box_location: string;
   stadium_id: string;

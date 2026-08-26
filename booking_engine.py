@@ -26,7 +26,7 @@ from sqlalchemy import select
 
 from db import db_session
 from models import (
-    new_id, PrivateBox, Stadium, Owner, Renter, Listing, BookingRecord,
+    new_id, PrivateBox, Stadium, Owner, Renter, User, Listing, BookingRecord,
     BoxRequest, RentRequest,
 )
 
@@ -134,7 +134,8 @@ class BookingEngine:
 
     def create_rent_request(self, renter_id: str, box_id: str, date: str,
                              message: str = "") -> RentRequest:
-        """Renter selects a box+date to rent. Builds a request object with
+        """Renter (or an owner acting as one — owners can rent any box but
+        their own) selects a box+date to rent. Builds a request object with
         renter's info and sends it to the booking engine (process_rent_request).
         Also records a BoxRequest directly on the box so the owner can see,
         for that specific date, who requested it and with what history —
@@ -142,6 +143,8 @@ class BookingEngine:
         of them until one is accepted."""
         renter = self._get_renter(renter_id)
         box = self._get_box(box_id)
+        if box.owner_id == renter_id:
+            raise ValueError("Este palco es tuyo — solo puedes rentar palcos de otros propietarios.")
         listing = box.find_listing(date)
         if listing is None:
             raise ValueError("No listing available for that date")
@@ -159,7 +162,7 @@ class BookingEngine:
             respond_by=compute_respond_by(date),
             renter_snapshot={
                 "email": renter.email,
-                "renting_history_count": len(renter.booking_history_ids),
+                "renting_history_count": len(history_summary),
                 "social_media": renter.social_media,
                 "location": renter.location,
             },
@@ -178,17 +181,21 @@ class BookingEngine:
         db_session.flush()
         return self.process_rent_request(request)
 
-    def _renter_history_summary(self, renter: Renter) -> list[dict]:
+    def _renter_history_summary(self, renter: User) -> list[dict]:
         """Summarized past requests for a renter (their own booking record,
         not the box's) — embedded onto each BoxRequest so an owner can
-        gauge a renter's track record without a separate lookup."""
+        gauge a renter's track record without a separate lookup. Queried
+        directly by renter_id rather than via Renter.rent_requests, since
+        the requester may be an Owner-typed account."""
+        past_requests = db_session.scalars(
+            select(RentRequest).where(RentRequest.renter_id == renter.id))
         return [{
             "request_id": past.id,
             "box_id": past.box_id,
             "date": past.date,
             "price": past.price,
             "status": past.status,
-        } for past in renter.rent_requests]
+        } for past in past_requests]
 
     def submit_payment(self, request_id: str, provider: str, token: str,
                         amount: float, deposit: float) -> RentRequest:
@@ -237,23 +244,9 @@ class BookingEngine:
         """Listener that receives booking requests and routes them to the
         owner. If multiple requests come in for the same box/date, they are
         all surfaced to the owner (solves the race-condition problem) and
-        the owner picks which to accept."""
-        # In a full system this would push a notification to the owner.
-        # Here we simply leave the request 'pending' for the owner to see
-        # via list_requests_for_owner().
+        the owner picks which to accept. The request stays 'pending'; the
+        owner sees it via /solicitudes and gets emailed by runner.py."""
         return request
-
-    def list_requests_for_owner(self, owner_id: str, box_id: Optional[str] = None,
-                                 status: Optional[str] = None) -> list[RentRequest]:
-        self._get_owner(owner_id)
-        stmt = (select(RentRequest)
-                .join(PrivateBox, RentRequest.box_id == PrivateBox.id)
-                .where(PrivateBox.owner_id == owner_id))
-        if box_id:
-            stmt = stmt.where(RentRequest.box_id == box_id)
-        if status:
-            stmt = stmt.where(RentRequest.status == status)
-        return list(db_session.scalars(stmt))
 
     def list_requests_for_renter(self, renter_id: str) -> list[RentRequest]:
         stmt = select(RentRequest).where(RentRequest.renter_id == renter_id)
@@ -488,8 +481,12 @@ class BookingEngine:
             raise ValueError("Unknown owner")
         return owner
 
-    def _get_renter(self, renter_id: str) -> Renter:
-        renter = db_session.get(Renter, renter_id)
+    def _get_renter(self, renter_id: str) -> User:
+        """Looks up by base User, not the Renter subclass: an Owner account
+        can also submit rent requests (see create_rent_request), and a
+        Renter-typed query would filter it out via the polymorphic
+        discriminator."""
+        renter = db_session.get(User, renter_id)
         if renter is None:
             raise ValueError("Unknown renter")
         return renter
