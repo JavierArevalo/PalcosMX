@@ -17,8 +17,17 @@ with Base44 touches). **Live at [palcos.onrender.com](https://palcos.onrender.co
   just the demo accounts) to confirm deliverability at small scale.
 - [ ] Renter → owner account upgrade path — currently a renter can't become
   an owner without a separate signup; owners can already rent (see below).
-- [ ] Real payment integration (`process_payment()` is the Stripe
-  integration point) — low priority for now.
+- [ ] Real payment confirmation mechanism — `process_payment()` is the
+  Stripe integration point. This got more load-bearing than it used to
+  be: the renter's "Marcar Pago Completado" button is just a
+  self-reported click with no actual payment verification behind it, but
+  it's now also what triggers auto-rejecting every competing request for
+  that box/date (see "What changed most recently"). Nothing currently
+  stops a renter from clicking it without actually paying, which would
+  incorrectly lock out other legitimate renters for that date. Needs a
+  real confirmation signal (a successful charge, a webhook from the
+  payment provider, etc.) in place of the click before this matters for
+  anything beyond a demo.
 
 ## Owner demo accounts
 
