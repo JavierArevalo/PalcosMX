@@ -4,6 +4,7 @@
  * simulated-email confirmation code so the confirm screen can display it.
  */
 import { createContext, useContext, useState, type ReactNode } from "react";
+import { flushSync } from "react-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, post, ApiError, type Me } from "@/lib/api";
 
@@ -33,7 +34,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
   const [demoCode, setDemoCode] = useState<string | null>(null);
 
-  const { data: user = null, isLoading } = useQuery({
+  const { data: queriedUser = null, isLoading } = useQuery({
     queryKey: ["me"],
     queryFn: async (): Promise<Me | null> => {
       try {
@@ -47,7 +48,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     retry: false,
   });
 
-  const setMe = (me: Me | null) => queryClient.setQueryData(["me"], me);
+  // Callers navigate() right after setMe() resolves, and that navigation
+  // mounts route guards (RequireAuth) that read `user` from this same
+  // context. Routing the update only through the query cache isn't
+  // guaranteed to be visible to those guards in the same synchronous tick,
+  // which let them see a stale `null` and bounce back to /acceso (fixed
+  // only by submitting again). A plain useState override, set with
+  // flushSync, IS guaranteed by React to commit before the next line runs —
+  // so `user` reads it in preference to the query result whenever it's set.
+  const [override, setOverride] = useState<{ value: Me | null } | null>(null);
+  const user = override ? override.value : queriedUser;
+
+  const setMe = (me: Me | null) => {
+    flushSync(() => setOverride({ value: me }));
+    queryClient.setQueryData(["me"], me);
+  };
 
   const value: AuthContextValue = {
     user,
